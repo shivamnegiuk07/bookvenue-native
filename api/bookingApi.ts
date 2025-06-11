@@ -32,7 +32,7 @@ export const bookingApi = {
           name: booking.facility,
           type: booking.court,
           location: 'Location not available',
-          slug: `venue-${index}`, // Add slug for navigation
+          slug: `venue-${index}`,
           images: [
             'https://images.pexels.com/photos/1263426/pexels-photo-1263426.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
             'https://images.pexels.com/photos/3582038/pexels-photo-3582038.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
@@ -104,14 +104,26 @@ export const bookingApi = {
       const response = await api.post('/booking', bookingData);
       return response.data;
     } catch (error: any) {
+      console.error('Booking creation error:', error.response?.data || error);
       throw new Error(error.response?.data?.message || 'Failed to create booking');
+    }
+  },
+
+  createMultipleBookings: async (bookingsData: any[]) => {
+    try {
+      const bookingPromises = bookingsData.map(bookingData => 
+        api.post('/booking', bookingData)
+      );
+      const responses = await Promise.all(bookingPromises);
+      return responses.map(response => response.data);
+    } catch (error: any) {
+      console.error('Multiple bookings creation error:', error.response?.data || error);
+      throw new Error(error.response?.data?.message || 'Failed to create bookings');
     }
   },
 
   cancelBooking: async (bookingId: string) => {
     try {
-      // This would be the actual cancel booking API call
-      // For now, we'll simulate it
       const response = await api.post(`/cancel-booking/${bookingId}`);
       return response.data;
     } catch (error: any) {

@@ -19,6 +19,17 @@ export default function VenueCard({ venue, size }: VenueCardProps) {
     });
   };
   
+  // Get the current price based on selected service/court or default
+  const getCurrentPrice = () => {
+    if (venue.services && venue.services.length > 0) {
+      const firstService = venue.services[0];
+      if (firstService.courts && firstService.courts.length > 0) {
+        return parseFloat(firstService.courts[0].slot_price);
+      }
+    }
+    return venue.pricePerHour;
+  };
+  
   if (size === 'large') {
     return (
       <TouchableOpacity 
@@ -39,7 +50,7 @@ export default function VenueCard({ venue, size }: VenueCardProps) {
             <Text style={styles.locationText} numberOfLines={1}>{venue.location}</Text>
           </View>
           <View style={styles.priceContainer}>
-            <Text style={styles.priceText}>₹{venue.pricePerHour}/hour</Text>
+            <Text style={styles.priceText}>₹{getCurrentPrice()}/hour</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -69,7 +80,7 @@ export default function VenueCard({ venue, size }: VenueCardProps) {
             <Text style={styles.venueTypeText}>{venue.type}</Text>
           </View>
           <View style={styles.priceContainer}>
-            <Text style={styles.priceText}>₹{venue.pricePerHour}/hour</Text>
+            <Text style={styles.priceText}>₹{getCurrentPrice()}/hour</Text>
           </View>
         </View>
       </View>

@@ -21,7 +21,7 @@ api.interceptors.request.use(async (config) => {
 });
 
 export const authApi = {
-  // Send OTP
+  // Send OTP for login
   login: async (identifier: string) => {
     try {
       const endpoint = identifier.includes('@') ? '/login-via-email' : '/login';
@@ -36,7 +36,22 @@ export const authApi = {
     }
   },
 
-  // Verify OTP
+  // Send OTP for registration
+  register: async (identifier: string) => {
+    try {
+      const endpoint = identifier.includes('@') ? '/register' : '/register';
+      const payload = identifier.includes('@')
+        ? { email: identifier }
+        : { mobile: identifier };
+      await api.post(endpoint, payload);
+      return;
+    } catch (error: any) {
+      console.error('Register Error:', error.response?.data || error);
+      throw new Error(error.response?.data?.message || 'Failed to send registration OTP');
+    }
+  },
+
+  // Verify OTP for login
   verifyOTP: async (identifier: string, otp: string) => {
     try {
       const isEmail = identifier.includes('@');
@@ -58,6 +73,29 @@ export const authApi = {
     }
   },
 
+  // Verify OTP for registration
+  verifyRegisterOTP: async (identifier: string, otp: string, name?: string) => {
+    try {
+      const isEmail = identifier.includes('@');
+      const payload = {
+        [isEmail ? 'email' : 'mobile']: identifier,
+        otp,
+        ...(name && { name })
+      };
+      const response = await api.post('/verify-register-user', payload);
+      if (response.data.token) {
+        await AsyncStorage.setItem('token', response.data.token);
+        if (response.data.user) {
+          await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+      }
+      return response.data;
+    } catch (error: any) {
+      console.error('Register OTP Verification Error:', error.response?.data || error);
+      throw new Error(error.response?.data?.message || 'Failed to verify registration OTP');
+    }
+  },
+
   getProfile: async () => {
     try {
       const response = await api.get('/get-user-details');
@@ -74,24 +112,6 @@ export const authApi = {
       };
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to get profile');
-    }
-  },
-
-  register: async (name: string, email: string, password: string, isVenueOwner: boolean) => {
-    try {
-      const response = await api.post('/register', {
-        name,
-        email,
-        password,
-        role: isVenueOwner ? 'provider' : 'user'
-      });
-
-      const { user, token } = response.data;
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      return user;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Registration failed');
     }
   },
 

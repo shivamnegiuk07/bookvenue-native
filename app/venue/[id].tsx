@@ -18,10 +18,10 @@ export default function VenueDetailScreen() {
   const [selectedService, setSelectedService] = useState<VenueService | null>(null);
   const [selectedCourt, setSelectedCourt] = useState<VenueCourt | null>(null);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
   
   const today = new Date();
-  const nextDays = Array.from({ length: 7 }, (_, i) => {
+  const nextDays = Array.from({ length: 15 }, (_, i) => {
     const date = new Date();
     date.setDate(today.getDate() + i);
     return {
@@ -73,7 +73,7 @@ export default function VenueDetailScreen() {
       }
       
       setAvailableTimeSlots(slots);
-      setSelectedTimeSlot('');
+      setSelectedTimeSlots([]);
     }
   }, [selectedDate, selectedCourt]);
 
@@ -82,26 +82,48 @@ export default function VenueDetailScreen() {
     if (service.courts && service.courts.length > 0) {
       setSelectedCourt(service.courts[0]);
     }
-    setSelectedTimeSlot('');
+    setSelectedTimeSlots([]);
   };
 
   const handleCourtChange = (court: VenueCourt) => {
     setSelectedCourt(court);
-    setSelectedTimeSlot('');
+    setSelectedTimeSlots([]);
+  };
+
+  const handleTimeSlotToggle = (slot: string) => {
+    setSelectedTimeSlots(prev => {
+      if (prev.includes(slot)) {
+        return prev.filter(s => s !== slot);
+      } else {
+        return [...prev, slot].sort();
+      }
+    });
+  };
+
+  const calculateTotalAmount = () => {
+    if (!selectedCourt || selectedTimeSlots.length === 0) return 0;
+    return parseFloat(selectedCourt.slot_price) * selectedTimeSlots.length;
   };
 
   const handleBooking = () => {
-    if (!selectedTimeSlot || !selectedCourt) {
+    if (selectedTimeSlots.length === 0 || !selectedCourt) {
       return;
     }
     
+    // For multiple slots, we'll pass all selected slots
     const duration = parseInt(selectedCourt.duration || '60');
-    const startHour = parseInt(selectedTimeSlot.split(':')[0]);
-    const startMinute = parseInt(selectedTimeSlot.split(':')[1]);
-    const endHour = startHour + Math.floor(duration / 60);
-    const endMinute = startMinute + (duration % 60);
-    
-    const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+    const bookingSlots = selectedTimeSlots.map(slot => {
+      const startHour = parseInt(slot.split(':')[0]);
+      const startMinute = parseInt(slot.split(':')[1]);
+      const endHour = startHour + Math.floor(duration / 60);
+      const endMinute = startMinute + (duration % 60);
+      const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+      
+      return {
+        startTime: slot,
+        endTime: endTime
+      };
+    });
     
     router.push({
       pathname: '/booking/confirm',
@@ -110,11 +132,11 @@ export default function VenueDetailScreen() {
         serviceId: selectedService?.id,
         courtId: selectedCourt?.id,
         date: selectedDate,
-        startTime: selectedTimeSlot,
-        endTime: endTime,
+        bookingSlots: JSON.stringify(bookingSlots),
         price: selectedCourt?.slot_price,
         courtName: selectedCourt?.court_name,
-        serviceName: selectedService?.name
+        serviceName: selectedService?.name,
+        totalSlots: selectedTimeSlots.length.toString()
       }
     });
   };
@@ -142,6 +164,8 @@ export default function VenueDetailScreen() {
       </SafeAreaView>
     );
   }
+
+  const totalAmount = calculateTotalAmount();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -363,21 +387,23 @@ export default function VenueDetailScreen() {
             </View>
           </ScrollView>
           
-          <Text style={styles.timeSelectionTitle}>Select Time Slot</Text>
+          <Text style={styles.timeSelectionTitle}>
+            Select Time Slots {selectedTimeSlots.length > 0 && `(${selectedTimeSlots.length} selected)`}
+          </Text>
           <View style={styles.timeSlotContainer}>
             {availableTimeSlots.map((slot, index) => (
               <TouchableOpacity 
                 key={index}
                 style={[
                   styles.timeSlot,
-                  selectedTimeSlot === slot && styles.selectedTimeSlot
+                  selectedTimeSlots.includes(slot) && styles.selectedTimeSlot
                 ]}
-                onPress={() => setSelectedTimeSlot(slot)}
+                onPress={() => handleTimeSlotToggle(slot)}
               >
                 <Text 
                   style={[
                     styles.timeSlotText,
-                    selectedTimeSlot === slot && styles.selectedTimeSlotText
+                    selectedTimeSlots.includes(slot) && styles.selectedTimeSlotText
                   ]}
                 >
                   {slot}
@@ -388,22 +414,31 @@ export default function VenueDetailScreen() {
           
           <View style={styles.bookingFooter}>
             <View style={styles.priceContainer}>
-              <Text style={styles.priceLabel}>Price</Text>
-              <Text style={styles.priceValue}>
-                ₹{selectedCourt ? selectedCourt.slot_price : venue.pricePerHour}
+              <Text style={styles.priceLabel}>
+                {selectedTimeSlots.length > 1 ? 'Total' : 'Price'}
               </Text>
-              <Text style={styles.priceUnit}>/hour</Text>
+              <Text style={styles.priceValue}>
+                ₹{totalAmount || (selectedCourt ? selectedCourt.slot_price : venue.pricePerHour)}
+              </Text>
+              {selectedTimeSlots.length <= 1 && (
+                <Text style={styles.priceUnit}>/hour</Text>
+              )}
+              {selectedTimeSlots.length > 1 && (
+                <Text style={styles.priceUnit}>({selectedTimeSlots.length} slots)</Text>
+              )}
             </View>
             
             <TouchableOpacity 
               style={[
                 styles.bookButton,
-                !selectedTimeSlot && styles.bookButtonDisabled
+                selectedTimeSlots.length === 0 && styles.bookButtonDisabled
               ]}
               onPress={handleBooking}
-              disabled={!selectedTimeSlot}
+              disabled={selectedTimeSlots.length === 0}
             >
-              <Text style={styles.bookButtonText}>Book Now</Text>
+              <Text style={styles.bookButtonText}>
+                Book {selectedTimeSlots.length > 1 ? `${selectedTimeSlots.length} Slots` : 'Now'}
+              </Text>
               <ArrowRight size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>

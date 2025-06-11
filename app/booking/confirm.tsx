@@ -21,21 +21,21 @@ export default function BookingConfirmScreen() {
     serviceId, 
     courtId, 
     date, 
-    startTime, 
-    endTime, 
+    bookingSlots,
     price, 
     courtName, 
-    serviceName 
+    serviceName,
+    totalSlots
   } = useLocalSearchParams<{
     venueId: string;
     serviceId: string;
     courtId: string;
     date: string;
-    startTime: string;
-    endTime: string;
+    bookingSlots: string;
     price: string;
     courtName: string;
     serviceName: string;
+    totalSlots: string;
   }>();
   
   const router = useRouter();
@@ -47,6 +47,9 @@ export default function BookingConfirmScreen() {
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  const slots = bookingSlots ? JSON.parse(bookingSlots) : [];
+  const numberOfSlots = parseInt(totalSlots || '1');
+
   useEffect(() => {
     const fetchVenue = async () => {
       try {
@@ -72,7 +75,9 @@ export default function BookingConfirmScreen() {
       document.body.appendChild(script);
       
       return () => {
-        document.body.removeChild(script);
+        if (document.body.contains(script)) {
+          document.body.removeChild(script);
+        }
       };
     }
   }, []);
@@ -85,33 +90,31 @@ export default function BookingConfirmScreen() {
   
   const calculateTotalAmount = () => {
     if (!price) return 0;
-    
-    const priceValue = parseFloat(price);
-    const startHour = parseInt(startTime?.split(':')[0] || '0');
-    const endHour = parseInt(endTime?.split(':')[0] || '0');
-    const hours = endHour - startHour;
-    
-    return priceValue * hours;
+    return parseFloat(price) * numberOfSlots;
   };
   
   const totalAmount = calculateTotalAmount();
   
   const handleRazorpayPayment = () => {
     if (Platform.OS !== 'web') {
-      // For mobile platforms, you would use react-native-razorpay
-      // For now, we'll simulate the payment
-      handlePaymentSuccess('mobile_payment_id');
+      // For mobile platforms, simulate payment success
+      handlePaymentSuccess('mobile_payment_' + Date.now());
+      return;
+    }
+
+    if (!window.Razorpay) {
+      setError('Razorpay is not loaded. Please try again.');
+      setPaymentLoading(false);
       return;
     }
 
     const options = {
-      key: 'rzp_live_qyWsOEPEllNahd', // Replace with your Razorpay key
+      key: 'rzp_live_qyWsOEPEllNahd',
       amount: totalAmount * 100, // Amount in paise
       currency: 'INR',
       name: 'BookVenue',
       description: `Booking for ${venue?.name} - ${courtName}`,
       image: 'https://images.pexels.com/photos/3775042/pexels-photo-3775042.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
-      order_id: '', // You would get this from your backend
       handler: function (response: any) {
         handlePaymentSuccess(response.razorpay_payment_id);
       },
@@ -125,8 +128,7 @@ export default function BookingConfirmScreen() {
         service_id: serviceId,
         court_id: courtId,
         date: date,
-        start_time: startTime,
-        end_time: endTime
+        total_slots: numberOfSlots
       },
       theme: {
         color: '#2563EB'
@@ -147,20 +149,39 @@ export default function BookingConfirmScreen() {
       setPaymentLoading(true);
       setError(null);
       
-      // Create booking with payment details
-      const bookingData = {
-        facility_id: venueId,
-        service_id: serviceId,
-        court_id: courtId,
-        date: date,
-        start_time: startTime,
-        end_time: endTime,
-        price: totalAmount.toString(),
-        payment_id: paymentId,
-        payment_method: 'razorpay'
-      };
+      // Create bookings for each slot
+      if (slots.length > 1) {
+        // Multiple bookings
+        const bookingsData = slots.map((slot: any, index: number) => ({
+          facility_id: venueId,
+          service_id: serviceId,
+          court_id: courtId,
+          date: date,
+          start_time: slot.startTime,
+          end_time: slot.endTime,
+          price: price,
+          payment_id: `${paymentId}_${index}`,
+          payment_method: 'razorpay'
+        }));
+        
+        await bookingApi.createMultipleBookings(bookingsData);
+      } else {
+        // Single booking
+        const bookingData = {
+          facility_id: venueId,
+          service_id: serviceId,
+          court_id: courtId,
+          date: date,
+          start_time: slots[0]?.startTime,
+          end_time: slots[0]?.endTime,
+          price: totalAmount.toString(),
+          payment_id: paymentId,
+          payment_method: 'razorpay'
+        };
+        
+        await bookingApi.createBooking(bookingData);
+      }
       
-      await bookingApi.createBooking(bookingData);
       setBookingConfirmed(true);
       
       // Navigate to bookings screen after 2 seconds
@@ -222,7 +243,7 @@ export default function BookingConfirmScreen() {
           </View>
           <Text style={styles.successTitle}>Booking Confirmed!</Text>
           <Text style={styles.successText}>
-            Your booking has been successfully confirmed. You can view your booking details in the Bookings tab.
+            Your {numberOfSlots > 1 ? `${numberOfSlots} bookings have` : 'booking has'} been successfully confirmed. You can view your booking details in the Bookings tab.
           </Text>
         </View>
       </SafeAreaView>
@@ -273,26 +294,47 @@ export default function BookingConfirmScreen() {
             <View style={styles.detailItem}>
               <Clock size={20} color="#2563EB" />
               <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Time</Text>
-                <Text style={styles.detailValue}>{startTime} - {endTime}</Text>
+                <Text style={styles.detailLabel}>Time Slots</Text>
+                <Text style={styles.detailValue}>
+                  {numberOfSlots > 1 
+                    ? `${numberOfSlots} slots selected`
+                    : `${slots[0]?.startTime} - ${slots[0]?.endTime}`
+                  }
+                </Text>
               </View>
             </View>
             
             <View style={styles.detailItem}>
               <DollarSign size={20} color="#2563EB" />
               <View style={styles.detailTextContainer}>
-                <Text style={styles.detailLabel}>Price per hour</Text>
+                <Text style={styles.detailLabel}>Price per slot</Text>
                 <Text style={styles.detailValue}>₹{price}</Text>
               </View>
             </View>
           </View>
+
+          {numberOfSlots > 1 && (
+            <View style={styles.slotsContainer}>
+              <Text style={styles.slotsTitle}>Selected Time Slots:</Text>
+              {slots.map((slot: any, index: number) => (
+                <View key={index} style={styles.slotItem}>
+                  <Text style={styles.slotText}>
+                    {slot.startTime} - {slot.endTime}
+                  </Text>
+                  <Text style={styles.slotPrice}>₹{price}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
         
         <View style={styles.paymentSummaryContainer}>
           <Text style={styles.sectionTitle}>Payment Summary</Text>
           
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryItemLabel}>Venue charges</Text>
+            <Text style={styles.summaryItemLabel}>
+              {numberOfSlots > 1 ? `Venue charges (${numberOfSlots} slots)` : 'Venue charges'}
+            </Text>
             <Text style={styles.summaryItemValue}>₹{totalAmount.toFixed(2)}</Text>
           </View>
           
@@ -495,6 +537,38 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     fontSize: 16,
     color: '#1F2937',
+  },
+  slotsContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  slotsTitle: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 16,
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  slotItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  slotText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  slotPrice: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#2563EB',
   },
   paymentSummaryContainer: {
     backgroundColor: '#FFFFFF',
