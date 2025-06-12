@@ -25,32 +25,47 @@ export const bookingApi = {
   getBookings: async () => {
     try {
       const response = await api.get('/my-bookings');
-      return response.data.bookings.map((booking: any, index: number) => ({
-        id: `booking-${index}`,
-        venue: {
-          id: `venue-${index}`,
-          name: booking.facility,
-          type: booking.court,
-          location: 'Location not available',
-          slug: `venue-${index}`,
-          images: [
+      console.log('Raw booking response:', response.data);
+      
+      if (!response.data.bookings || !Array.isArray(response.data.bookings)) {
+        console.warn('No bookings found or invalid format');
+        return [];
+      }
+
+      return response.data.bookings.map((booking: any, index: number) => {
+        // Get venue image from booking data or use fallback
+        const venueImage = booking.venue_image || 
+          booking.facility?.featured_image ? 
+          `https://admin.bookvenue.app/${booking.facility.featured_image.replace(/\\/g, '/')}` :
+          [
             'https://images.pexels.com/photos/1263426/pexels-photo-1263426.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
             'https://images.pexels.com/photos/3582038/pexels-photo-3582038.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
             'https://images.pexels.com/photos/2277981/pexels-photo-2277981.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
             'https://images.pexels.com/photos/1752757/pexels-photo-1752757.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
             'https://images.pexels.com/photos/358042/pexels-photo-358042.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'
-          ][index % 5],
-          coordinates: {
-            latitude: 37.78825 + (Math.random() - 0.5) * 0.01,
-            longitude: -122.4324 + (Math.random() - 0.5) * 0.01
-          }
-        },
-        date: booking.date,
-        startTime: booking.start_time,
-        endTime: booking.end_time,
-        totalAmount: parseFloat(booking.price),
-        status: booking.status.toLowerCase()
-      }));
+          ][index % 5];
+
+        return {
+          id: booking.id?.toString() || `booking-${index}`,
+          venue: {
+            id: booking.facility_id?.toString() || `venue-${index}`,
+            name: booking.facility_name || booking.facility || 'Unknown Venue',
+            type: booking.court_name || booking.court || 'Court',
+            location: booking.venue_location || 'Location not available',
+            slug: booking.facility_slug || `venue-${index}`,
+            images: [venueImage],
+            coordinates: {
+              latitude: parseFloat(booking.venue_lat || '37.78825') + (Math.random() - 0.5) * 0.01,
+              longitude: parseFloat(booking.venue_lng || '-122.4324') + (Math.random() - 0.5) * 0.01
+            }
+          },
+          date: booking.date,
+          startTime: booking.start_time,
+          endTime: booking.end_time,
+          totalAmount: parseFloat(booking.total_price || booking.price || '0'),
+          status: (booking.status || 'pending').toLowerCase()
+        };
+      });
     } catch (error: any) {
       console.error('Error fetching bookings:', error);
       throw new Error(error.response?.data?.message || 'Failed to fetch bookings');
@@ -59,48 +74,47 @@ export const bookingApi = {
   
   getBookingById: async (id: string) => {
     try {
-      const response = await api.get('/my-bookings');
-      const bookingIndex = parseInt(id.replace('booking-', ''));
-      const booking = response.data.bookings[bookingIndex];
+      const response = await api.get(`/booking/${id}`);
+      const booking = response.data.booking;
       
       if (!booking) {
         throw new Error('Booking not found');
       }
       
+      const venueImage = booking.venue_image || 
+        booking.facility?.featured_image ? 
+        `https://admin.bookvenue.app/${booking.facility.featured_image.replace(/\\/g, '/')}` :
+        'https://images.pexels.com/photos/1263426/pexels-photo-1263426.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2';
+      
       return {
-        id: id,
+        id: booking.id?.toString() || id,
         venue: {
-          id: `venue-${bookingIndex}`,
-          name: booking.facility,
-          type: booking.court,
-          location: 'Location not available',
-          slug: `venue-${bookingIndex}`,
-          images: [
-            'https://images.pexels.com/photos/1263426/pexels-photo-1263426.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-            'https://images.pexels.com/photos/3582038/pexels-photo-3582038.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-            'https://images.pexels.com/photos/2277981/pexels-photo-2277981.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-            'https://images.pexels.com/photos/1752757/pexels-photo-1752757.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-            'https://images.pexels.com/photos/358042/pexels-photo-358042.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'
-          ][bookingIndex % 5],
+          id: booking.facility_id?.toString() || 'venue-1',
+          name: booking.facility_name || booking.facility || 'Unknown Venue',
+          type: booking.court_name || booking.court || 'Court',
+          location: booking.venue_location || 'Location not available',
+          slug: booking.facility_slug || 'venue-1',
+          images: [venueImage],
           coordinates: {
-            latitude: 37.78825 + (Math.random() - 0.5) * 0.01,
-            longitude: -122.4324 + (Math.random() - 0.5) * 0.01
+            latitude: parseFloat(booking.venue_lat || '37.78825'),
+            longitude: parseFloat(booking.venue_lng || '-122.4324')
           }
         },
         date: booking.date,
         startTime: booking.start_time,
         endTime: booking.end_time,
-        totalAmount: parseFloat(booking.price),
-        status: booking.status.toLowerCase()
+        totalAmount: parseFloat(booking.total_price || booking.price || '0'),
+        status: (booking.status || 'pending').toLowerCase()
       };
     } catch (error: any) {
+      console.error('Error fetching booking by ID:', error);
       throw new Error(error.response?.data?.message || 'Failed to fetch booking');
     }
   },
   
   createBooking: async (bookingData: any) => {
-        console.log('Creating booking with data:', bookingData);
     try {
+      console.log('Creating booking with data:', bookingData);
       const response = await api.post('/booking', bookingData);
       return response.data;
     } catch (error: any) {
@@ -128,6 +142,31 @@ export const bookingApi = {
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to cancel booking');
+    }
+  },
+
+  paymentSuccess: async (orderId: string, paymentId: string) => {
+    try {
+      const response = await api.post('/booking/payment-success', {
+        order_id: orderId,
+        payment_id: paymentId
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Payment success update error:', error);
+      throw new Error(error.response?.data?.message || 'Failed to update payment status');
+    }
+  },
+
+  paymentFailure: async (orderId: string) => {
+    try {
+      const response = await api.post('/booking/payment-failure', {
+        order_id: orderId
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Payment failure update error:', error);
+      throw new Error(error.response?.data?.message || 'Failed to update payment status');
     }
   }
 };

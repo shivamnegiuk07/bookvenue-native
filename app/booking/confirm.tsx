@@ -6,16 +6,8 @@ import { venueApi } from '@/api/venueApi';
 import { bookingApi } from '@/api/bookingApi';
 import { Venue } from '@/types/venue';
 import { useAuth } from '@/contexts/AuthContext';
-import { User} from 'lucide-react-native';
 import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, CreditCard, CircleCheck as CheckCircle2 } from 'lucide-react-native';
-import RazorpayCheckout from 'react-native-razorpay';
-
-// Razorpay types
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+import { RazorpayService } from '@/utils/razorpay';
 
 export default function BookingConfirmScreen() {
   const {
@@ -70,22 +62,6 @@ export default function BookingConfirmScreen() {
     fetchVenue();
   }, [venueId]);
 
-  // Load Razorpay script for web
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.async = true;
-      document.body.appendChild(script);
-
-      return () => {
-        if (document.body.contains(script)) {
-          document.body.removeChild(script);
-        }
-      };
-    }
-  }, []);
-
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
     const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
@@ -98,55 +74,6 @@ export default function BookingConfirmScreen() {
   };
 
   const totalAmount = calculateTotalAmount();
-
-  const handleRazorpayPayment = () => {
-    if (Platform.OS !== 'web') {
-      // For mobile platforms, simulate payment success
-      handlePaymentSuccess('mobile_payment_' + Date.now());
-      return;
-    }
-
-    if (!window.Razorpay) {
-      setError('Razorpay is not loaded. Please try again.');
-      setPaymentLoading(false);
-      return;
-    }
-
-    const options = {
-      key: 'rzp_live_qyWsOEPEllNahd',
-      amount: totalAmount * 100, // Amount in paise
-      currency: 'INR',
-      name: 'BookVenue',
-      description: `Booking for ${venue?.name} - ${courtName}`,
-      image: 'https://images.pexels.com/photos/3775042/pexels-photo-3775042.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
-      handler: function (response: any) {
-        handlePaymentSuccess(response.razorpay_payment_id);
-      },
-      prefill: {
-        name: user?.name || '',
-        email: user?.email || '',
-        contact: user?.phone || ''
-      },
-      notes: {
-        venue_id: venueId,
-        service_id: serviceId,
-        court_id: courtId,
-        date: date,
-        total_slots: numberOfSlots
-      },
-      theme: {
-        color: '#2563EB'
-      },
-      modal: {
-        ondismiss: function () {
-          setPaymentLoading(false);
-        }
-      }
-    };
-
-    const rzp = new window.Razorpay(options);
-    rzp.open();
-  };
 
   const handlePaymentSuccess = async (paymentId: string) => {
     try {
@@ -161,20 +88,14 @@ export default function BookingConfirmScreen() {
           facility_id: facility_id,
           date: date,
           duration: "60",
-          end_time: slots[0]?.endTime,
-          total_price: totalAmount.toString(),
+          end_time: slot.endTime,
+          total_price: price,
           court_id: courtId,
-          start_time: slots[0]?.startTime,
+          start_time: slot.startTime,
           name: user?.name,
           email: user?.email,
           contact: user?.phone,
           address: user?.address || "Not provided",
-          selected_slots: slots.map((slot: any) => ({
-            start_time: slot.startTime,
-            end_time: slot.endTime,
-            status: "Available"
-          })),
-          slot_count: slots.length,
         }));
 
         await bookingApi.createMultipleBookings(bookingsData);
@@ -193,14 +114,6 @@ export default function BookingConfirmScreen() {
           email: user?.email,
           contact: user?.phone,
           address: user?.address || "Not provided",
-          selected_slots: [
-            {
-              start_time: slots[0]?.startTime,
-              end_time: slots[0]?.endTime,
-              status: "Available"
-            }
-          ],
-          slot_count: slots.length,
         };
 
         await bookingApi.createBooking(bookingData);
@@ -209,7 +122,6 @@ export default function BookingConfirmScreen() {
       setBookingConfirmed(true);
 
       // Navigate to bookings screen after 2 seconds
-
       setTimeout(() => {
         router.replace('/bookings');
       }, 2000);
@@ -226,11 +138,35 @@ export default function BookingConfirmScreen() {
       setPaymentLoading(true);
       setError(null);
 
-      // Initialize Razorpay payment
-      handleRazorpayPayment();
+      if (!user) {
+        throw new Error('User not logged in');
+      }
+
+      const paymentOptions = RazorpayService.createPaymentOptions(
+        totalAmount,
+        `order_${Date.now()}`, // Generate order ID
+        {
+          name: user.name,
+          email: user.email,
+          contact: user.phone
+        },
+        {
+          venueName: venue?.name || 'Unknown Venue',
+          courtName: courtName || 'Court',
+          date: date || '',
+          slots: numberOfSlots
+        }
+      );
+
+      const response = await RazorpayService.openCheckout(paymentOptions);
+      await handlePaymentSuccess(response.razorpay_payment_id);
 
     } catch (error: any) {
-      setError(error.message || 'Payment failed. Please try again.');
+      if (error.message === 'Payment cancelled by user') {
+        setError('Payment was cancelled');
+      } else {
+        setError(error.message || 'Payment failed. Please try again.');
+      }
       setPaymentLoading(false);
     }
   };

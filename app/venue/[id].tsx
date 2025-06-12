@@ -47,7 +47,6 @@ export default function VenueDetailScreen() {
             setSelectedCourt(response.services[0].courts[0]);
           }
         }
-
       } catch (error) {
         console.error('Error fetching venue:', error);
       } finally {
@@ -58,52 +57,40 @@ export default function VenueDetailScreen() {
     fetchVenue();
   }, [id]);
   
-  // useEffect(() => {
-  //   if (selectedDate && selectedCourt) {
-  //     // Generate time slots based on selected court
-  //     const openingHour = parseInt(selectedCourt.start_time.split(':')[0]);
-  //     const closingHour = parseInt(selectedCourt.end_time.split(':')[0]);
-  //     const duration = parseInt(selectedCourt.duration || '60');
-      
-  //     const slots = [];
-  //     for (let hour = openingHour; hour < closingHour; hour += (duration / 60)) {
-  //       const startHour = Math.floor(hour);
-  //       const startMinute = (hour % 1) * 60;
-  //       const timeString = `${startHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
-  //       slots.push(timeString);
-  //     }
-      
-  //     setAvailableTimeSlots(slots);
-  //     setSelectedTimeSlots([]);
-  //   }
-  // }, [selectedDate, selectedCourt]);
   useEffect(() => {
-  if (selectedDate && selectedCourt) {
+    if (selectedDate && selectedCourt) {
+      console.log('Generating time slots for court:', selectedCourt);
+      
+      // Ensure we have valid time data
+      if (!selectedCourt.start_time || !selectedCourt.end_time) {
+        console.warn('Missing time data for court:', selectedCourt);
+        setAvailableTimeSlots([]);
+        return;
+      }
 
+      const openingHour = parseInt(selectedCourt.start_time.split(':')[0]);
+      const closingHour = parseInt(selectedCourt.end_time.split(':')[0]);
+      const duration = parseInt(selectedCourt.duration || '60');
 
-    const openingHour = parseInt(selectedCourt.start_time?.split(':')[0]);
-    const closingHour = parseInt(selectedCourt.end_time?.split(':')[0]);
-    const duration = parseInt(selectedCourt.duration || '60');
+      if (isNaN(openingHour) || isNaN(closingHour) || isNaN(duration)) {
+        console.warn("Invalid time data", { openingHour, closingHour, duration });
+        setAvailableTimeSlots([]);
+        return;
+      }
 
-    if (isNaN(openingHour) || isNaN(closingHour) || isNaN(duration)) {
-      console.warn("Invalid time data", { openingHour, closingHour, duration });
-      setAvailableTimeSlots([]);
-      return;
+      const slots = [];
+      for (let hour = openingHour; hour < closingHour; hour += (duration / 60)) {
+        const startHour = Math.floor(hour);
+        const startMinute = (hour % 1) * 60;
+        const timeString = `${startHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
+        slots.push(timeString);
+      }
+
+      console.log('Generated time slots:', slots);
+      setAvailableTimeSlots(slots);
+      setSelectedTimeSlots([]);
     }
-
-    const slots = [];
-    for (let hour = openingHour; hour < closingHour; hour += (duration / 60)) {
-      const startHour = Math.floor(hour);
-      const startMinute = (hour % 1) * 60;
-      const timeString = `${startHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
-      slots.push(timeString);
-    }
-
-    setAvailableTimeSlots(slots);
-    setSelectedTimeSlots([]);
-  }
-}, [selectedDate, selectedCourt]);
-
+  }, [selectedDate, selectedCourt]);
 
   const handleServiceChange = (service: VenueService) => {
     setSelectedService(service);
@@ -419,27 +406,34 @@ export default function VenueDetailScreen() {
           <Text style={styles.timeSelectionTitle}>
             Select Time Slots {selectedTimeSlots.length > 0 && `(${selectedTimeSlots.length} selected)`}
           </Text>
-          <View style={styles.timeSlotContainer}>
-            {availableTimeSlots.map((slot, index) => (
-              <TouchableOpacity 
-                key={index}
-                style={[
-                  styles.timeSlot,
-                  selectedTimeSlots.includes(slot) && styles.selectedTimeSlot
-                ]}
-                onPress={() => handleTimeSlotToggle(slot)}
-              >
-                <Text 
+          
+          {availableTimeSlots.length > 0 ? (
+            <View style={styles.timeSlotContainer}>
+              {availableTimeSlots.map((slot, index) => (
+                <TouchableOpacity 
+                  key={index}
                   style={[
-                    styles.timeSlotText,
-                    selectedTimeSlots.includes(slot) && styles.selectedTimeSlotText
+                    styles.timeSlot,
+                    selectedTimeSlots.includes(slot) && styles.selectedTimeSlot
                   ]}
+                  onPress={() => handleTimeSlotToggle(slot)}
                 >
-                  {slot}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text 
+                    style={[
+                      styles.timeSlotText,
+                      selectedTimeSlots.includes(slot) && styles.selectedTimeSlotText
+                    ]}
+                  >
+                    {slot}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.noSlotsContainer}>
+              <Text style={styles.noSlotsText}>No time slots available for selected court</Text>
+            </View>
+          )}
           
           <View style={styles.bookingFooter}>
             <View style={styles.priceContainer}>
@@ -807,6 +801,18 @@ const styles = StyleSheet.create({
   },
   selectedTimeSlotText: {
     color: '#FFFFFF',
+  },
+  noSlotsContainer: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    marginBottom: 24,
+  },
+  noSlotsText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#6B7280',
   },
   bookingFooter: {
     flexDirection: 'row',

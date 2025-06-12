@@ -22,7 +22,6 @@ export const venueApi = {
         const service = facility.services?.[0];
         const court = service?.courts?.[0];
 
-
         const images = service?.images
           ? JSON.parse(service.images).map((img: string) => `https://admin.bookvenue.app/${img.replace(/\\/g, '/')}`)
           : [];
@@ -36,7 +35,7 @@ export const venueApi = {
           type: service?.name || 'Other',
           pricePerHour: parseFloat(court?.slot_price || '100'),
           openingTime: court?.start_time || '09:00',
-          closingTime: court?.end_time || '10:00',
+          closingTime: court?.end_time || '22:00',
           rating: 4.5,
           amenities: ['Parking', 'Changing Rooms', 'Lighting'],
           images: images.length > 0 ? images : [
@@ -62,16 +61,10 @@ export const venueApi = {
       const response = await api.get(`/get-facility-by-slug/${slug}`);
       const facility = response.data.facility;
 
-      // Process services with proper image URLs
+      // Process services with proper image URLs and fix courts array
       const processedServices = facility.services?.map((service: any) => ({
         ...service,
-        courts: service.court?.map((court: any) => ({
-          ...court,
-          slot_price: court.slot_price,
-          start_time: court.start_time,
-          end_time: court.end_time,
-          duration: court.duration || '60'
-        }))
+        courts: service.courts || service.court || [] // Handle both 'courts' and 'court' properties
       })) || [];
 
       // Get images from the first service or use default
@@ -80,7 +73,7 @@ export const venueApi = {
         ? JSON.parse(firstService.images).map((img: string) => `https://admin.bookvenue.app/${img.replace(/\\/g, '/')}`)
         : [];
 
-      return {
+      const venueData = {
         id: facility.id.toString(),
         slug: facility.slug,
         name: facility.official_name,
@@ -89,7 +82,7 @@ export const venueApi = {
         type: firstService?.name || 'Other',
         pricePerHour: parseFloat(firstService?.courts?.[0]?.slot_price || '0'),
         openingTime: firstService?.courts?.[0]?.start_time || '09:00',
-        closingTime: firstService?.courts?.[0]?.end_time || '20:00',
+        closingTime: firstService?.courts?.[0]?.end_time || '22:00',
         rating: 4.5,
         amenities: ['Parking', 'Changing Rooms', 'Lighting'],
         images: images.length > 0 ? images : [
@@ -101,7 +94,9 @@ export const venueApi = {
         },
         services: processedServices
       };
-      console.log('Venue fetched successfully:', facility);
+
+      console.log('Venue fetched successfully:', venueData);
+      return venueData;
     } catch (error) {
       console.error('Error fetching venue by slug:', error);
       throw new Error('Venue not found');

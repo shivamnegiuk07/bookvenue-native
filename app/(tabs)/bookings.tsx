@@ -11,14 +11,19 @@ export default function BookingsScreen() {
   const [activeTab, setActiveTab] = useState('upcoming');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const response = await bookingApi.getBookings();
+        console.log('Fetched bookings:', response);
         setBookings(response);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching bookings:', error);
+        setError(error.message || 'Failed to fetch bookings');
       } finally {
         setLoading(false);
       }
@@ -27,17 +32,24 @@ export default function BookingsScreen() {
     fetchBookings();
   }, []);
 
-  const upcomingBookings = bookings.filter(booking => 
-    new Date(booking.date + 'T' + booking.startTime) > new Date()
-  );
+  const upcomingBookings = bookings.filter(booking => {
+    const bookingDateTime = new Date(booking.date + 'T' + booking.startTime);
+    return bookingDateTime > new Date();
+  });
   
-  const pastBookings = bookings.filter(booking => 
-    new Date(booking.date + 'T' + booking.startTime) <= new Date()
-  );
+  const pastBookings = bookings.filter(booking => {
+    const bookingDateTime = new Date(booking.date + 'T' + booking.startTime);
+    return bookingDateTime <= new Date();
+  });
 
   const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+    if (!dateString) return 'Invalid Date';
+    try {
+      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      return new Date(dateString).toLocaleDateString('en-US', options);
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
   const handleRebook = (booking: Booking) => {
@@ -58,7 +70,13 @@ export default function BookingsScreen() {
       >
         <View style={styles.bookingHeader}>
           <View style={styles.venueImageContainer}>
-            <Image source={{ uri: item.venue.images[0] }} style={styles.venueImage} />
+            <Image 
+              source={{ uri: item.venue.images[0] }} 
+              style={styles.venueImage}
+              onError={(e) => {
+                console.log('Image load error:', e.nativeEvent.error);
+              }}
+            />
           </View>
           <View style={styles.bookingInfo}>
             <Text style={styles.venueName}>{item.venue.name}</Text>
@@ -145,6 +163,30 @@ export default function BookingsScreen() {
     );
   };
 
+  const renderErrorComponent = () => {
+    return (
+      <View style={styles.emptyContainer}>
+        <CalendarX size={48} color="#EF4444" />
+        <Text style={styles.emptyTitle}>Error loading bookings</Text>
+        <Text style={styles.emptyDescription}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.exploreButton}
+          onPress={() => {
+            setError(null);
+            setLoading(true);
+            // Retry fetching bookings
+            bookingApi.getBookings()
+              .then(setBookings)
+              .catch((err) => setError(err.message))
+              .finally(() => setLoading(false));
+          }}
+        >
+          <Text style={styles.exploreButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -170,6 +212,8 @@ export default function BookingsScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
+      ) : error ? (
+        renderErrorComponent()
       ) : (
         <FlatList
           data={activeTab === 'upcoming' ? upcomingBookings : pastBookings}
