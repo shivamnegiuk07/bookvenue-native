@@ -22,6 +22,7 @@ export const venueApi = {
         const service = facility.services?.[0];
         const court = service?.courts?.[0];
 
+
         const images = service?.images
           ? JSON.parse(service.images).map((img: string) => `https://admin.bookvenue.app/${img.replace(/\\/g, '/')}`)
           : [];
@@ -33,9 +34,9 @@ export const venueApi = {
           description: facility.description || '',
           location: facility.address,
           type: service?.name || 'Other',
-          pricePerHour: parseFloat(court?.slot_price || '0'),
-          openingTime: court?.start_time || '08:00',
-          closingTime: court?.end_time || '20:00',
+          pricePerHour: parseFloat(court?.slot_price || '100'),
+          openingTime: court?.start_time || '09:00',
+          closingTime: court?.end_time || '10:00',
           rating: 4.5,
           amenities: ['Parking', 'Changing Rooms', 'Lighting'],
           images: images.length > 0 ? images : [
@@ -64,7 +65,7 @@ export const venueApi = {
       // Process services with proper image URLs
       const processedServices = facility.services?.map((service: any) => ({
         ...service,
-        courts: service.courts?.map((court: any) => ({
+        courts: service.court?.map((court: any) => ({
           ...court,
           slot_price: court.slot_price,
           start_time: court.start_time,
@@ -87,7 +88,7 @@ export const venueApi = {
         location: facility.address,
         type: firstService?.name || 'Other',
         pricePerHour: parseFloat(firstService?.courts?.[0]?.slot_price || '0'),
-        openingTime: firstService?.courts?.[0]?.start_time || '08:00',
+        openingTime: firstService?.courts?.[0]?.start_time || '09:00',
         closingTime: firstService?.courts?.[0]?.end_time || '20:00',
         rating: 4.5,
         amenities: ['Parking', 'Changing Rooms', 'Lighting'],
@@ -100,6 +101,7 @@ export const venueApi = {
         },
         services: processedServices
       };
+      console.log('Venue fetched successfully:', facility);
     } catch (error) {
       console.error('Error fetching venue by slug:', error);
       throw new Error('Venue not found');
