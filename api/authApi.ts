@@ -106,7 +106,7 @@ export const authApi = {
         email: userData.email,
         phone: userData.contact || userData.phone,
         address: userData.address,
-        isVenueOwner: false, // Set based on your logic
+        isVenueOwner: false,
         createdAt: userData.created_at,
         updatedAt: userData.updated_at
       };
