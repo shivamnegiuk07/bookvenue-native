@@ -20,6 +20,7 @@ export default function BookingDetailScreen() {
       try {
         if (!id) return;
         const response = await bookingApi.getBookingById(id);
+        // Ensure venue.images is always an array
         setBooking({
           ...response,
           venue: {
