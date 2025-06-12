@@ -42,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkLoggedIn = async () => {
       try {
         const token = await AsyncStorage.getItem('token');
+        console.log('Checking logged-in status, token:', token);
         if (token) {
           const userData = await authApi.getProfile();
           setUser(userData);
@@ -74,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isVenueOwner: boolean
   ): Promise<void> => {
     try {
-      const userData = await authApi.register(name, email, password, isVenueOwner);
+      const userData = await authApi.register({ name, email, password, isVenueOwner });
       setUser(userData);
     } catch (error) {
       console.error('Registration failed:', error);
