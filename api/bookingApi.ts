@@ -99,8 +99,8 @@ export const bookingApi = {
   },
   
   createBooking: async (bookingData: any) => {
+        console.log('Creating booking with data:', bookingData);
     try {
-      console.log('Creating booking with data:', bookingData);
       const response = await api.post('/booking', bookingData);
       return response.data;
     } catch (error: any) {
