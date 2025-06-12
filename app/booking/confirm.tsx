@@ -6,7 +6,9 @@ import { venueApi } from '@/api/venueApi';
 import { bookingApi } from '@/api/bookingApi';
 import { Venue } from '@/types/venue';
 import { useAuth } from '@/contexts/AuthContext';
+import { User} from 'lucide-react-native';
 import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, CreditCard, CircleCheck as CheckCircle2 } from 'lucide-react-native';
+import RazorpayCheckout from 'react-native-razorpay';
 
 // Razorpay types
 declare global {
@@ -16,18 +18,20 @@ declare global {
 }
 
 export default function BookingConfirmScreen() {
-  const { 
-    venueId, 
-    serviceId, 
-    courtId, 
-    date, 
+  const {
+    venueId,
+    facility_id,
+    serviceId,
+    courtId,
+    date,
     bookingSlots,
-    price, 
-    courtName, 
+    price,
+    courtName,
     serviceName,
     totalSlots
   } = useLocalSearchParams<{
     venueId: string;
+    facility_id: string;
     serviceId: string;
     courtId: string;
     date: string;
@@ -37,16 +41,16 @@ export default function BookingConfirmScreen() {
     serviceName: string;
     totalSlots: string;
   }>();
-  
+
   const router = useRouter();
   const { user } = useAuth();
-  
+
   const [venue, setVenue] = useState<Venue | null>(null);
   const [loading, setLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const slots = bookingSlots ? JSON.parse(bookingSlots) : [];
   const numberOfSlots = parseInt(totalSlots || '1');
 
@@ -73,7 +77,7 @@ export default function BookingConfirmScreen() {
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.async = true;
       document.body.appendChild(script);
-      
+
       return () => {
         if (document.body.contains(script)) {
           document.body.removeChild(script);
@@ -81,20 +85,20 @@ export default function BookingConfirmScreen() {
       };
     }
   }, []);
-  
+
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
     const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
-  
+
   const calculateTotalAmount = () => {
     if (!price) return 0;
     return parseFloat(price) * numberOfSlots;
   };
-  
+
   const totalAmount = calculateTotalAmount();
-  
+
   const handleRazorpayPayment = () => {
     if (Platform.OS !== 'web') {
       // For mobile platforms, simulate payment success
@@ -134,7 +138,7 @@ export default function BookingConfirmScreen() {
         color: '#2563EB'
       },
       modal: {
-        ondismiss: function() {
+        ondismiss: function () {
           setPaymentLoading(false);
         }
       }
@@ -148,47 +152,68 @@ export default function BookingConfirmScreen() {
     try {
       setPaymentLoading(true);
       setError(null);
-      
+
       // Create bookings for each slot
       if (slots.length > 1) {
         // Multiple bookings
         const bookingsData = slots.map((slot: any, index: number) => ({
-          facility_id: venueId,
-          service_id: serviceId,
-          court_id: courtId,
+          type: "sports",
+          facility_id: facility_id,
           date: date,
-          start_time: slot.startTime,
-          end_time: slot.endTime,
-          price: price,
-          payment_id: `${paymentId}_${index}`,
-          payment_method: 'razorpay'
+          duration: "60",
+          end_time: slots[0]?.endTime,
+          total_price: totalAmount.toString(),
+          court_id: courtId,
+          start_time: slots[0]?.startTime,
+          name: user?.name,
+          email: user?.email,
+          contact: user?.phone,
+          address: user?.address || "Not provided",
+          selected_slots: slots.map((slot: any) => ({
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+            status: "Available"
+          })),
+          slot_count: slots.length,
         }));
-        
+
         await bookingApi.createMultipleBookings(bookingsData);
       } else {
         // Single booking
         const bookingData = {
-          facility_id: venueId,
-          service_id: serviceId,
-          court_id: courtId,
+          type: "sports",
+          facility_id: facility_id,
           date: date,
-          start_time: slots[0]?.startTime,
+          duration: "60",
           end_time: slots[0]?.endTime,
-          price: totalAmount.toString(),
-          payment_id: paymentId,
-          payment_method: 'razorpay'
+          total_price: totalAmount.toString(),
+          court_id: courtId,
+          start_time: slots[0]?.startTime,
+          name: user?.name,
+          email: user?.email,
+          contact: user?.phone,
+          address: user?.address || "Not provided",
+          selected_slots: [
+            {
+              start_time: slots[0]?.startTime,
+              end_time: slots[0]?.endTime,
+              status: "Available"
+            }
+          ],
+          slot_count: slots.length,
         };
-        
+
         await bookingApi.createBooking(bookingData);
       }
-      
+
       setBookingConfirmed(true);
-      
+
       // Navigate to bookings screen after 2 seconds
+
       setTimeout(() => {
         router.replace('/bookings');
       }, 2000);
-      
+
     } catch (error: any) {
       setError(error.message || 'Booking failed. Please try again.');
     } finally {
@@ -200,10 +225,10 @@ export default function BookingConfirmScreen() {
     try {
       setPaymentLoading(true);
       setError(null);
-      
+
       // Initialize Razorpay payment
       handleRazorpayPayment();
-      
+
     } catch (error: any) {
       setError(error.message || 'Payment failed. Please try again.');
       setPaymentLoading(false);
@@ -223,7 +248,7 @@ export default function BookingConfirmScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Venue not found</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
@@ -253,7 +278,7 @@ export default function BookingConfirmScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButtonContainer}
           onPress={() => router.back()}
         >
@@ -262,14 +287,14 @@ export default function BookingConfirmScreen() {
         <Text style={styles.headerTitle}>Confirm Booking</Text>
         <View style={styles.placeholder} />
       </View>
-      
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.bookingDetailsContainer}>
           <Text style={styles.sectionTitle}>Booking Details</Text>
-          
+
           <View style={styles.venueInfoContainer}>
-            <Image 
-              source={{ uri: venue.images[0] }} 
+            <Image
+              source={{ uri: venue.images[0] }}
               style={styles.venueImage}
             />
             <View style={styles.venueInfo}>
@@ -281,7 +306,7 @@ export default function BookingConfirmScreen() {
               <Text style={styles.serviceInfo}>{serviceName} - {courtName}</Text>
             </View>
           </View>
-          
+
           <View style={styles.detailsContainer}>
             <View style={styles.detailItem}>
               <Calendar size={20} color="#2563EB" />
@@ -290,20 +315,20 @@ export default function BookingConfirmScreen() {
                 <Text style={styles.detailValue}>{formatDate(date || '')}</Text>
               </View>
             </View>
-            
+
             <View style={styles.detailItem}>
               <Clock size={20} color="#2563EB" />
               <View style={styles.detailTextContainer}>
                 <Text style={styles.detailLabel}>Time Slots</Text>
                 <Text style={styles.detailValue}>
-                  {numberOfSlots > 1 
+                  {numberOfSlots > 1
                     ? `${numberOfSlots} slots selected`
                     : `${slots[0]?.startTime} - ${slots[0]?.endTime}`
                   }
                 </Text>
               </View>
             </View>
-            
+
             <View style={styles.detailItem}>
               <DollarSign size={20} color="#2563EB" />
               <View style={styles.detailTextContainer}>
@@ -327,48 +352,48 @@ export default function BookingConfirmScreen() {
             </View>
           )}
         </View>
-        
+
         <View style={styles.paymentSummaryContainer}>
           <Text style={styles.sectionTitle}>Payment Summary</Text>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryItemLabel}>
               {numberOfSlots > 1 ? `Venue charges (${numberOfSlots} slots)` : 'Venue charges'}
             </Text>
             <Text style={styles.summaryItemValue}>₹{totalAmount.toFixed(2)}</Text>
           </View>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryItemLabel}>Service fee</Text>
             <Text style={styles.summaryItemValue}>₹0.00</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.totalItem}>
             <Text style={styles.totalLabel}>Total Amount</Text>
             <Text style={styles.totalValue}>₹{totalAmount.toFixed(2)}</Text>
           </View>
         </View>
-        
+
         <View style={styles.paymentMethodContainer}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          
+
           <TouchableOpacity style={styles.paymentMethodItem}>
             <CreditCard size={20} color="#2563EB" />
             <Text style={styles.paymentMethodText}>Razorpay (UPI, Cards, Wallets)</Text>
           </TouchableOpacity>
         </View>
-        
+
         {error && (
           <View style={styles.errorMessageContainer}>
             <Text style={styles.errorMessage}>{error}</Text>
           </View>
         )}
       </ScrollView>
-      
+
       <View style={styles.footer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.payButton}
           onPress={handlePayment}
           disabled={paymentLoading}
