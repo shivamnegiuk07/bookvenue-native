@@ -47,6 +47,7 @@ export default function VenueDetailScreen() {
             setSelectedCourt(response.services[0].courts[0]);
           }
         }
+
       } catch (error) {
         console.error('Error fetching venue:', error);
       } finally {
@@ -57,25 +58,52 @@ export default function VenueDetailScreen() {
     fetchVenue();
   }, [id]);
   
+  // useEffect(() => {
+  //   if (selectedDate && selectedCourt) {
+  //     // Generate time slots based on selected court
+  //     const openingHour = parseInt(selectedCourt.start_time.split(':')[0]);
+  //     const closingHour = parseInt(selectedCourt.end_time.split(':')[0]);
+  //     const duration = parseInt(selectedCourt.duration || '60');
+      
+  //     const slots = [];
+  //     for (let hour = openingHour; hour < closingHour; hour += (duration / 60)) {
+  //       const startHour = Math.floor(hour);
+  //       const startMinute = (hour % 1) * 60;
+  //       const timeString = `${startHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
+  //       slots.push(timeString);
+  //     }
+      
+  //     setAvailableTimeSlots(slots);
+  //     setSelectedTimeSlots([]);
+  //   }
+  // }, [selectedDate, selectedCourt]);
   useEffect(() => {
-    if (selectedDate && selectedCourt) {
-      // Generate time slots based on selected court
-      const openingHour = parseInt(selectedCourt.start_time.split(':')[0]);
-      const closingHour = parseInt(selectedCourt.end_time.split(':')[0]);
-      const duration = parseInt(selectedCourt.duration || '60');
-      
-      const slots = [];
-      for (let hour = openingHour; hour < closingHour; hour += (duration / 60)) {
-        const startHour = Math.floor(hour);
-        const startMinute = (hour % 1) * 60;
-        const timeString = `${startHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
-        slots.push(timeString);
-      }
-      
-      setAvailableTimeSlots(slots);
-      setSelectedTimeSlots([]);
+  if (selectedDate && selectedCourt) {
+
+
+    const openingHour = parseInt(selectedCourt.start_time?.split(':')[0]);
+    const closingHour = parseInt(selectedCourt.end_time?.split(':')[0]);
+    const duration = parseInt(selectedCourt.duration || '60');
+
+    if (isNaN(openingHour) || isNaN(closingHour) || isNaN(duration)) {
+      console.warn("Invalid time data", { openingHour, closingHour, duration });
+      setAvailableTimeSlots([]);
+      return;
     }
-  }, [selectedDate, selectedCourt]);
+
+    const slots = [];
+    for (let hour = openingHour; hour < closingHour; hour += (duration / 60)) {
+      const startHour = Math.floor(hour);
+      const startMinute = (hour % 1) * 60;
+      const timeString = `${startHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
+      slots.push(timeString);
+    }
+
+    setAvailableTimeSlots(slots);
+    setSelectedTimeSlots([]);
+  }
+}, [selectedDate, selectedCourt]);
+
 
   const handleServiceChange = (service: VenueService) => {
     setSelectedService(service);
@@ -124,11 +152,12 @@ export default function VenueDetailScreen() {
         endTime: endTime
       };
     });
-    
+
     router.push({
       pathname: '/booking/confirm',
       params: {
         venueId: venue?.slug,
+        facility_id: venue?.id,
         serviceId: selectedService?.id,
         courtId: selectedCourt?.id,
         date: selectedDate,
