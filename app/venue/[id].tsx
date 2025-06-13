@@ -37,6 +37,7 @@ export default function VenueDetailScreen() {
       try {
         if (!id) return;
         const response = await venueApi.getVenueBySlug(id);
+        console.log('Venue data:', response);
         setVenue(response);
         
         // Set initial selections

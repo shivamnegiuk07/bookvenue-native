@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { bookingApi } from '@/api/bookingApi';
 import { Booking } from '@/types/booking';
-import { CalendarClock, MapPin, Clock, CalendarCheck, CalendarX, RotateCcw } from 'lucide-react-native';
+import { CalendarX } from 'lucide-react-native';
+import BookingCard from '@/components/BookingCard';
 
 export default function BookingsScreen() {
   const router = useRouter();
@@ -42,16 +43,6 @@ export default function BookingsScreen() {
     return bookingDateTime <= new Date();
   });
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Invalid Date';
-    try {
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
-      return new Date(dateString).toLocaleDateString('en-US', options);
-    } catch (error) {
-      return 'Invalid Date';
-    }
-  };
-
   const handleRebook = (booking: Booking) => {
     // Navigate to venue detail page for rebooking
     router.push({
@@ -60,86 +51,9 @@ export default function BookingsScreen() {
     });
   };
 
-  const renderBookingItem = ({ item }: { item: Booking }) => {
-    const isUpcoming = new Date(item.date + 'T' + item.startTime) > new Date();
-    
-    return (
-      <TouchableOpacity 
-        style={styles.bookingCard}
-        onPress={() => router.push(`/booking/${item.id}`)}
-      >
-        <View style={styles.bookingHeader}>
-          <View style={styles.venueImageContainer}>
-            <Image 
-              source={{ uri: item.venue.images[0] }} 
-              style={styles.venueImage}
-              onError={(e) => {
-                console.log('Image load error:', e.nativeEvent.error);
-              }}
-            />
-          </View>
-          <View style={styles.bookingInfo}>
-            <Text style={styles.venueName}>{item.venue.name}</Text>
-            <View style={styles.locationContainer}>
-              <MapPin size={14} color="#6B7280" />
-              <Text style={styles.locationText}>{item.venue.location}</Text>
-            </View>
-            {item.venue.type && (
-              <Text style={styles.venueType}>{item.venue.type}</Text>
-            )}
-          </View>
-        </View>
-        
-        <View style={styles.bookingDetails}>
-          <View style={styles.detailItem}>
-            <CalendarCheck size={16} color="#2563EB" />
-            <Text style={styles.detailText}>{formatDate(item.date)}</Text>
-          </View>
-          
-          <View style={styles.detailItem}>
-            <Clock size={16} color="#2563EB" />
-            <Text style={styles.detailText}>{item.startTime} - {item.endTime}</Text>
-          </View>
-        </View>
-        
-        <View style={styles.bookingFooter}>
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Total</Text>
-            <Text style={styles.priceValue}>₹{item.totalAmount}</Text>
-          </View>
-          
-          <View style={styles.rightSection}>
-            <View style={[
-              styles.statusContainer, 
-              item.status === 'confirmed' ? styles.statusConfirmed : 
-              item.status === 'pending' ? styles.statusPending : 
-              styles.statusCancelled
-            ]}>
-              <Text style={[
-                styles.statusText,
-                item.status === 'confirmed' ? styles.statusTextConfirmed : 
-                item.status === 'pending' ? styles.statusTextPending : 
-                styles.statusTextCancelled
-              ]}>
-                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-              </Text>
-            </View>
-            
-            <TouchableOpacity 
-              style={styles.rebookButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleRebook(item);
-              }}
-            >
-              <RotateCcw size={16} color="#2563EB" />
-              <Text style={styles.rebookButtonText}>Rebook</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderBookingItem = ({ item }: { item: Booking }) => (
+    <BookingCard booking={item} onRebook={handleRebook} />
+  );
 
   const renderEmptyComponent = () => {
     return (
@@ -275,146 +189,6 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingBottom: 40,
-  },
-  bookingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  bookingHeader: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  venueImageContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginRight: 12,
-  },
-  venueImage: {
-    width: '100%',
-    height: '100%',
-  },
-  bookingInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  venueName: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  locationText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#6B7280',
-    marginLeft: 4,
-  },
-  venueType: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: '#2563EB',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-  },
-  bookingDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: '#4B5563',
-    marginLeft: 6,
-  },
-  bookingFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  priceLabel: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#6B7280',
-    marginRight: 4,
-  },
-  priceValue: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 16,
-    color: '#1F2937',
-  },
-  rightSection: {
-    alignItems: 'flex-end',
-  },
-  statusContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginBottom: 8,
-  },
-  statusConfirmed: {
-    backgroundColor: '#ECFDF5',
-  },
-  statusPending: {
-    backgroundColor: '#FEF3C7',
-  },
-  statusCancelled: {
-    backgroundColor: '#FEE2E2',
-  },
-  statusText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-  },
-  statusTextConfirmed: {
-    color: '#10B981',
-  },
-  statusTextPending: {
-    color: '#F59E0B',
-  },
-  statusTextCancelled: {
-    color: '#EF4444',
-  },
-  rebookButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 6,
-  },
-  rebookButtonText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: '#2563EB',
-    marginLeft: 4,
   },
   emptyContainer: {
     alignItems: 'center',

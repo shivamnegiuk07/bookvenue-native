@@ -1,28 +1,23 @@
-import React, { useState , useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, MapPin, Upload, Clock, Tag, AlertCircle, CheckCircle2 , IndianRupee } from 'lucide-react-native';
-import { Formik } from 'formik';
+import { Camera, MapPin, Clock, Tag, AlertCircle, CheckCircle2, IndianRupee, Plus, Trash2 } from 'lucide-react-native';
+import { Formik, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import * as ImagePicker from 'expo-image-picker';
-import { venueApi } from '@/api/venueApi';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const VenueSchema = Yup.object().shape({
-  name: Yup.string().required('Venue name is required'),
+  officialName: Yup.string().required('Venue name is required'),
   description: Yup.string().required('Description is required'),
-  location: Yup.string().required('Location is required'),
-  type: Yup.string().required('Sport type is required'),
-  pricePerHour: Yup.number()
-    .required('Price per hour is required')
-    .min(1, 'Price must be greater than 0'),
-  openingTime: Yup.string().required('Opening time is required'),
-  closingTime: Yup.string().required('Closing time is required'),
-  amenities: Yup.array().of(Yup.string()),
-  category: Yup.string().required('Category is required'),
-
+  address: Yup.string().required('Address is required'),
+  latitude: Yup.string().required('Latitude is required'),
+  longitude: Yup.string().required('Longitude is required'),
+  service_category_id: Yup.array().min(1, 'At least one category is required'),
+  amenities: Yup.array().min(1, 'At least one amenity is required'),
+  services: Yup.array().min(1, 'At least one service is required'),
 });
 
 export default function AddVenueScreen() {
@@ -32,28 +27,29 @@ export default function AddVenueScreen() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amenitiesOptions, setAmenitiesOptions] = useState([]);
-const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [services, setServices] = useState([]);
 
-  const sportTypes = ['Football', 'Cricket', 'Tennis', 'Basketball', 'Swimming', 'Badminton'];
-  // const amenitiesOptions = [
-  //   'Parking', 'Changing Rooms', 'Showers', 'Lighting', 
-  //   'Equipment Rental', 'Refreshments', 'Seating'
-  // ];
-useEffect(() => {
-  const fetchAmenities = async () => {
-    try {
-      const response = await axios.get('http://admin.bookvenue.app/api/get-all-amenities');
-      setAmenitiesOptions(response.data?.amenities || []);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [amenitiesResponse, categoriesResponse, servicesResponse] = await Promise.all([
+          axios.get('http://admin.bookvenue.app/api/get-all-amenities'),
+          axios.get('http://admin.bookvenue.app/api/get-all-service-category'),
+          axios.get('http://admin.bookvenue.app/api/get-all-services')
+        ]);
 
-      const categoryResponse = await axios.get('http://admin.bookvenue.app/api/get-all-service-category');
-      setCategories(categoryResponse.data?.service_category || []);
-    } catch (error) {
-      console.error('Failed to fetch amenities or categories:', error);
-    }
-  };
+        setAmenitiesOptions(amenitiesResponse.data?.amenities || []);
+        setCategories(categoriesResponse.data?.service_category || []);
+        setServices(servicesResponse.data?.services || []);
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+        setError('Failed to load form data. Please try again.');
+      }
+    };
 
-  fetchAmenities();
-}, []);
+    fetchData();
+  }, []);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -76,20 +72,53 @@ useEffect(() => {
       if (images.length === 0) {
         throw new Error('Please add at least one image of your venue');
       }
-      
-      // In a real app, we would upload the images to a server here
-      const venueData = {
-        ...values,
-        images,
-        coordinates: {
-          // In a real app, we would get these from a location picker
-          latitude: 37.78825,
-          longitude: -122.4324,
-        },
 
-      };
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      // Prepare form data
+      const formData = new FormData();
       
-      await venueApi.createVenue(venueData);
+      // Add basic venue data
+      formData.append('officialName', values.officialName);
+      formData.append('description', values.description);
+      formData.append('address', values.address);
+      formData.append('latitude', values.latitude);
+      formData.append('longitude', values.longitude);
+      
+      // Add arrays as JSON strings
+      formData.append('service_category_id', JSON.stringify(values.service_category_id));
+      formData.append('amenities', JSON.stringify(values.amenities));
+      formData.append('services', JSON.stringify(values.services));
+
+      // Add featured image (first image)
+      if (images[0]) {
+        const imageUri = images[0];
+        const filename = imageUri.split('/').pop() || 'image.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+        formData.append('featured_image', {
+          uri: imageUri,
+          name: filename,
+          type,
+        } as any);
+      }
+
+      // Create venue
+      const response = await axios.post(
+        'http://admin.bookvenue.app/api/create-facility',
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
       setSuccess(true);
       
       // Reset the form after 2 seconds
@@ -100,7 +129,8 @@ useEffect(() => {
       }, 2000);
       
     } catch (error: any) {
-      setError(error.message || 'Failed to create venue. Please try again.');
+      console.error('Venue creation error:', error);
+      setError(error.response?.data?.message || error.message || 'Failed to create venue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -129,21 +159,33 @@ useEffect(() => {
 
         <Formik
           initialValues={{
-            name: '',
+            officialName: '',
             description: '',
-            location: '',
-            type: '',
-            pricePerHour: '',
-            openingTime: '09:00',
-            closingTime: '22:00',
+            address: '',
+            latitude: '',
+            longitude: '',
+            service_category_id: [],
             amenities: [],
-            category: '',
+            services: [{
+              service_id: '',
+              description: '',
+              holiday: [],
+              courts: [{
+                courtName: '',
+                startTime: '09:00',
+                endTime: '22:00',
+                price: '',
+                duration: '60',
+                breakTimes: [{ start: null, end: null }]
+              }]
+            }]
           }}
           validationSchema={VenueSchema}
           onSubmit={handleSubmit}
         >
           {({ handleChange, handleBlur, handleSubmit, setFieldValue, values, errors, touched }) => (
             <View>
+              {/* Images Section */}
               <View style={styles.imageSection}>
                 <Text style={styles.sectionTitle}>Venue Images</Text>
                 <Text style={styles.sectionSubtitle}>Upload at least one image of your venue</Text>
@@ -168,6 +210,7 @@ useEffect(() => {
                 </ScrollView>
               </View>
 
+              {/* Basic Information */}
               <View style={styles.formSection}>
                 <Text style={styles.sectionTitle}>Basic Information</Text>
                 
@@ -177,12 +220,12 @@ useEffect(() => {
                     style={styles.input}
                     placeholder="Enter venue name"
                     placeholderTextColor="#9CA3AF"
-                    onChangeText={handleChange('name')}
-                    onBlur={handleBlur('name')}
-                    value={values.name}
+                    onChangeText={handleChange('officialName')}
+                    onBlur={handleBlur('officialName')}
+                    value={values.officialName}
                   />
-                  {touched.name && errors.name && (
-                    <Text style={styles.errorText}>{errors.name}</Text>
+                  {touched.officialName && errors.officialName && (
+                    <Text style={styles.errorText}>{errors.officialName}</Text>
                   )}
                 </View>
                 
@@ -204,167 +247,122 @@ useEffect(() => {
                 </View>
                 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Location</Text>
+                  <Text style={styles.inputLabel}>Address</Text>
                   <View style={styles.inputWithIcon}>
                     <MapPin size={20} color="#6B7280" style={styles.inputIcon} />
                     <TextInput
                       style={styles.inputText}
                       placeholder="Address of your venue"
                       placeholderTextColor="#9CA3AF"
-                      onChangeText={handleChange('location')}
-                      onBlur={handleBlur('location')}
-                      value={values.location}
+                      onChangeText={handleChange('address')}
+                      onBlur={handleBlur('address')}
+                      value={values.address}
                     />
                   </View>
-                  {touched.location && errors.location && (
-                    <Text style={styles.errorText}>{errors.location}</Text>
+                  {touched.address && errors.address && (
+                    <Text style={styles.errorText}>{errors.address}</Text>
                   )}
                 </View>
-              </View>
 
-              <View style={styles.formSection}>
-                <Text style={styles.sectionTitle}>Sport Type</Text>
-                <View style={styles.sportTypeContainer}>
-                  {sportTypes.map((sport) => (
-                    <TouchableOpacity 
-                      key={sport}
-                      style={[
-                        styles.sportTypeButton,
-                        values.type === sport ? styles.sportTypeButtonActive : null
-                      ]}
-                      onPress={() => setFieldValue('type', sport)}
-                    >
-                      <Text 
-                        style={[
-                          styles.sportTypeText,
-                          values.type === sport ? styles.sportTypeTextActive : null
-                        ]}
-                      >
-                        {sport}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {touched.type && errors.type && (
-                  <Text style={styles.errorText}>{errors.type}</Text>
-                )}
-              </View>
-
-              <View style={styles.formSection}>
-                <Text style={styles.sectionTitle}>Pricing & Availability</Text>
-                
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Price per Hour</Text>
-                  <View style={styles.inputWithIcon}>
-                    <IndianRupee size={20} color="#6B7280" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.inputText}
-                      placeholder="0"
-                      placeholderTextColor="#9CA3AF"
-                      keyboardType="numeric"
-                      onChangeText={handleChange('pricePerHour')}
-                      onBlur={handleBlur('pricePerHour')}
-                      value={values.pricePerHour}
-                    />
-                  </View>
-                  {touched.pricePerHour && errors.pricePerHour && (
-                    <Text style={styles.errorText}>{errors.pricePerHour}</Text>
-                  )}
-                </View>
-                
-                <View style={styles.timeContainer}>
+                <View style={styles.coordinatesContainer}>
                   <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                    <Text style={styles.inputLabel}>Opening Time</Text>
-                    <View style={styles.inputWithIcon}>
-                      <Clock size={20} color="#6B7280" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.inputText}
-                        placeholder="09:00"
-                        placeholderTextColor="#9CA3AF"
-                        onChangeText={handleChange('openingTime')}
-                        onBlur={handleBlur('openingTime')}
-                        value={values.openingTime}
-                      />
-                    </View>
-                    {touched.openingTime && errors.openingTime && (
-                      <Text style={styles.errorText}>{errors.openingTime}</Text>
+                    <Text style={styles.inputLabel}>Latitude</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="30.4095"
+                      placeholderTextColor="#9CA3AF"
+                      onChangeText={handleChange('latitude')}
+                      onBlur={handleBlur('latitude')}
+                      value={values.latitude}
+                      keyboardType="numeric"
+                    />
+                    {touched.latitude && errors.latitude && (
+                      <Text style={styles.errorText}>{errors.latitude}</Text>
                     )}
                   </View>
                   
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>Closing Time</Text>
-                    <View style={styles.inputWithIcon}>
-                      <Clock size={20} color="#6B7280" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.inputText}
-                        placeholder="22:00"
-                        placeholderTextColor="#9CA3AF"
-                        onChangeText={handleChange('closingTime')}
-                        onBlur={handleBlur('closingTime')}
-                        value={values.closingTime}
-                      />
-                    </View>
-                    {touched.closingTime && errors.closingTime && (
-                      <Text style={styles.errorText}>{errors.closingTime}</Text>
+                    <Text style={styles.inputLabel}>Longitude</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="77.9585"
+                      placeholderTextColor="#9CA3AF"
+                      onChangeText={handleChange('longitude')}
+                      onBlur={handleBlur('longitude')}
+                      value={values.longitude}
+                      keyboardType="numeric"
+                    />
+                    {touched.longitude && errors.longitude && (
+                      <Text style={styles.errorText}>{errors.longitude}</Text>
                     )}
                   </View>
                 </View>
               </View>
-<View style={styles.formSection}>
-  <Text style={styles.sectionTitle}>Category</Text>
-  <View style={styles.amenitiesContainer}>
-    {categories.map((cat) => {
-      const isSelected = values.category === cat.name;
-      return (
-        <TouchableOpacity
-          key={cat.id}
-          onPress={() => setFieldValue('category', cat.name)} // or cat.id if preferred
-          style={[
-            styles.amenityButton,
-            isSelected && styles.amenityButtonActive,
-          ]}
-        >
-          <Text
-            style={[
-              styles.amenityText,
-              isSelected && styles.amenityTextActive,
-            ]}
-          >
-            {cat.name}
-          </Text>
-        </TouchableOpacity>
-      );
-    })}
-  </View>
-</View>
 
+              {/* Categories */}
+              <View style={styles.formSection}>
+                <Text style={styles.sectionTitle}>Categories</Text>
+                <Text style={styles.sectionSubtitle}>Select applicable categories</Text>
+                <View style={styles.optionsContainer}>
+                  {categories.map((category) => {
+                    const isSelected = values.service_category_id.includes(category.id.toString());
+                    return (
+                      <TouchableOpacity
+                        key={category.id}
+                        style={[
+                          styles.optionButton,
+                          isSelected ? styles.optionButtonActive : null
+                        ]}
+                        onPress={() => {
+                          const newCategories = isSelected
+                            ? values.service_category_id.filter((id: string) => id !== category.id.toString())
+                            : [...values.service_category_id, category.id.toString()];
+                          setFieldValue('service_category_id', newCategories);
+                        }}
+                      >
+                        <Text 
+                          style={[
+                            styles.optionText,
+                            isSelected ? styles.optionTextActive : null
+                          ]}
+                        >
+                          {category.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {touched.service_category_id && errors.service_category_id && (
+                  <Text style={styles.errorText}>{errors.service_category_id}</Text>
+                )}
+              </View>
 
-
+              {/* Amenities */}
               <View style={styles.formSection}>
                 <Text style={styles.sectionTitle}>Amenities</Text>
                 <Text style={styles.sectionSubtitle}>Select all that apply</Text>
-
-                <View style={styles.amenitiesContainer}>
+                
+                <View style={styles.optionsContainer}>
                   {amenitiesOptions.map((amenity) => {
-                    const isSelected = values.amenities.includes(amenity.name);
+                    const isSelected = values.amenities.includes(amenity.id.toString());
                     return (
-                      <TouchableOpacity
+                      <TouchableOpacity 
                         key={amenity.id}
                         style={[
-                          styles.amenityButton,
-                          isSelected ? styles.amenityButtonActive : null
+                          styles.optionButton,
+                          isSelected ? styles.optionButtonActive : null
                         ]}
                         onPress={() => {
                           const newAmenities = isSelected
-                            ? values.amenities.filter((a: string) => a !== amenity.name)
-                            : [...values.amenities, amenity.name];
+                            ? values.amenities.filter((id: string) => id !== amenity.id.toString())
+                            : [...values.amenities, amenity.id.toString()];
                           setFieldValue('amenities', newAmenities);
                         }}
                       >
-                        <Text
+                        <Text 
                           style={[
-                            styles.amenityText,
-                            isSelected ? styles.amenityTextActive : null
+                            styles.optionText,
+                            isSelected ? styles.optionTextActive : null
                           ]}
                         >
                           {amenity.name}
@@ -373,11 +371,206 @@ useEffect(() => {
                     );
                   })}
                 </View>
-
+                {touched.amenities && errors.amenities && (
+                  <Text style={styles.errorText}>{errors.amenities}</Text>
+                )}
               </View>
 
-              <TouchableOpacity
-                style={styles.submitButton}
+              {/* Services */}
+              <FieldArray name="services">
+                {({ push, remove }) => (
+                  <View style={styles.formSection}>
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionTitle}>Services & Courts</Text>
+                      <TouchableOpacity
+                        style={styles.addServiceButton}
+                        onPress={() => push({
+                          service_id: '',
+                          description: '',
+                          holiday: [],
+                          courts: [{
+                            courtName: '',
+                            startTime: '09:00',
+                            endTime: '22:00',
+                            price: '',
+                            duration: '60',
+                            breakTimes: [{ start: null, end: null }]
+                          }]
+                        })}
+                      >
+                        <Plus size={16} color="#2563EB" />
+                        <Text style={styles.addServiceButtonText}>Add Service</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {values.services.map((service, serviceIndex) => (
+                      <View key={serviceIndex} style={styles.serviceContainer}>
+                        <View style={styles.serviceHeader}>
+                          <Text style={styles.serviceTitle}>Service {serviceIndex + 1}</Text>
+                          {values.services.length > 1 && (
+                            <TouchableOpacity
+                              style={styles.removeServiceButton}
+                              onPress={() => remove(serviceIndex)}
+                            >
+                              <Trash2 size={16} color="#EF4444" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                          <Text style={styles.inputLabel}>Service Type</Text>
+                          <View style={styles.serviceTypeContainer}>
+                            {services.map((serviceType) => (
+                              <TouchableOpacity
+                                key={serviceType.id}
+                                style={[
+                                  styles.serviceTypeButton,
+                                  service.service_id === serviceType.id.toString() ? styles.serviceTypeButtonActive : null
+                                ]}
+                                onPress={() => setFieldValue(`services.${serviceIndex}.service_id`, serviceType.id.toString())}
+                              >
+                                <Text
+                                  style={[
+                                    styles.serviceTypeText,
+                                    service.service_id === serviceType.id.toString() ? styles.serviceTypeTextActive : null
+                                  ]}
+                                >
+                                  {serviceType.name}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                          <Text style={styles.inputLabel}>Service Description</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Describe this service"
+                            placeholderTextColor="#9CA3AF"
+                            onChangeText={handleChange(`services.${serviceIndex}.description`)}
+                            value={service.description}
+                          />
+                        </View>
+
+                        {/* Courts for this service */}
+                        <FieldArray name={`services.${serviceIndex}.courts`}>
+                          {({ push: pushCourt, remove: removeCourt }) => (
+                            <View>
+                              <View style={styles.courtsHeader}>
+                                <Text style={styles.courtsTitle}>Courts</Text>
+                                <TouchableOpacity
+                                  style={styles.addCourtButton}
+                                  onPress={() => pushCourt({
+                                    courtName: '',
+                                    startTime: '09:00',
+                                    endTime: '22:00',
+                                    price: '',
+                                    duration: '60',
+                                    breakTimes: [{ start: null, end: null }]
+                                  })}
+                                >
+                                  <Plus size={14} color="#2563EB" />
+                                  <Text style={styles.addCourtButtonText}>Add Court</Text>
+                                </TouchableOpacity>
+                              </View>
+
+                              {service.courts.map((court, courtIndex) => (
+                                <View key={courtIndex} style={styles.courtContainer}>
+                                  <View style={styles.courtHeader}>
+                                    <Text style={styles.courtTitle}>Court {courtIndex + 1}</Text>
+                                    {service.courts.length > 1 && (
+                                      <TouchableOpacity
+                                        style={styles.removeCourtButton}
+                                        onPress={() => removeCourt(courtIndex)}
+                                      >
+                                        <Trash2 size={14} color="#EF4444" />
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+
+                                  <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Court Name</Text>
+                                    <TextInput
+                                      style={styles.input}
+                                      placeholder="e.g., Cricket Turf"
+                                      placeholderTextColor="#9CA3AF"
+                                      onChangeText={handleChange(`services.${serviceIndex}.courts.${courtIndex}.courtName`)}
+                                      value={court.courtName}
+                                    />
+                                  </View>
+
+                                  <View style={styles.timeContainer}>
+                                    <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                                      <Text style={styles.inputLabel}>Start Time</Text>
+                                      <View style={styles.inputWithIcon}>
+                                        <Clock size={20} color="#6B7280" style={styles.inputIcon} />
+                                        <TextInput
+                                          style={styles.inputText}
+                                          placeholder="09:00"
+                                          placeholderTextColor="#9CA3AF"
+                                          onChangeText={handleChange(`services.${serviceIndex}.courts.${courtIndex}.startTime`)}
+                                          value={court.startTime}
+                                        />
+                                      </View>
+                                    </View>
+                                    
+                                    <View style={[styles.inputGroup, { flex: 1 }]}>
+                                      <Text style={styles.inputLabel}>End Time</Text>
+                                      <View style={styles.inputWithIcon}>
+                                        <Clock size={20} color="#6B7280" style={styles.inputIcon} />
+                                        <TextInput
+                                          style={styles.inputText}
+                                          placeholder="22:00"
+                                          placeholderTextColor="#9CA3AF"
+                                          onChangeText={handleChange(`services.${serviceIndex}.courts.${courtIndex}.endTime`)}
+                                          value={court.endTime}
+                                        />
+                                      </View>
+                                    </View>
+                                  </View>
+
+                                  <View style={styles.priceContainer}>
+                                    <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                                      <Text style={styles.inputLabel}>Price per Hour</Text>
+                                      <View style={styles.inputWithIcon}>
+                                        <IndianRupee size={20} color="#6B7280" style={styles.inputIcon} />
+                                        <TextInput
+                                          style={styles.inputText}
+                                          placeholder="1500"
+                                          placeholderTextColor="#9CA3AF"
+                                          keyboardType="numeric"
+                                          onChangeText={handleChange(`services.${serviceIndex}.courts.${courtIndex}.price`)}
+                                          value={court.price}
+                                        />
+                                      </View>
+                                    </View>
+                                    
+                                    <View style={[styles.inputGroup, { flex: 1 }]}>
+                                      <Text style={styles.inputLabel}>Duration (mins)</Text>
+                                      <TextInput
+                                        style={styles.input}
+                                        placeholder="60"
+                                        placeholderTextColor="#9CA3AF"
+                                        keyboardType="numeric"
+                                        onChangeText={handleChange(`services.${serviceIndex}.courts.${courtIndex}.duration`)}
+                                        value={court.duration}
+                                      />
+                                    </View>
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </FieldArray>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </FieldArray>
+
+              <TouchableOpacity 
+                style={styles.submitButton} 
                 onPress={() => handleSubmit()}
                 disabled={loading}
               >
@@ -459,6 +652,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     fontSize: 14,
     color: '#6B7280',
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
   imagesScrollView: {
@@ -553,14 +752,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1F2937',
   },
+  coordinatesContainer: {
+    flexDirection: 'row',
+  },
   timeContainer: {
     flexDirection: 'row',
   },
-  sportTypeContainer: {
+  priceContainer: {
+    flexDirection: 'row',
+  },
+  optionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  sportTypeButton: {
+  optionButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -568,22 +773,22 @@ const styles = StyleSheet.create({
     marginRight: 12,
     marginBottom: 12,
   },
-  sportTypeButtonActive: {
+  optionButtonActive: {
     backgroundColor: '#DBEAFE',
   },
-  sportTypeText: {
+  optionText: {
     fontFamily: 'Inter-Medium',
     fontSize: 14,
     color: '#6B7280',
   },
-  sportTypeTextActive: {
+  optionTextActive: {
     color: '#2563EB',
   },
-  amenitiesContainer: {
+  serviceTypeContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  amenityButton: {
+  serviceTypeButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -591,16 +796,100 @@ const styles = StyleSheet.create({
     marginRight: 12,
     marginBottom: 12,
   },
-  amenityButtonActive: {
+  serviceTypeButtonActive: {
     backgroundColor: '#DBEAFE',
   },
-  amenityText: {
+  serviceTypeText: {
     fontFamily: 'Inter-Medium',
     fontSize: 14,
     color: '#6B7280',
   },
-  amenityTextActive: {
+  serviceTypeTextActive: {
     color: '#2563EB',
+  },
+  addServiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 6,
+  },
+  addServiceButtonText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#2563EB',
+    marginLeft: 4,
+  },
+  serviceContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  serviceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  serviceTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  removeServiceButton: {
+    padding: 4,
+  },
+  courtsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 16,
+  },
+  courtsTitle: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  addCourtButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 4,
+  },
+  addCourtButtonText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 12,
+    color: '#2563EB',
+    marginLeft: 4,
+  },
+  courtContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  courtHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  courtTitle: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  removeCourtButton: {
+    padding: 2,
   },
   submitButton: {
     backgroundColor: '#2563EB',

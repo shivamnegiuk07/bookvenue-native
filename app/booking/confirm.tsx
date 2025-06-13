@@ -6,7 +6,7 @@ import { venueApi } from '@/api/venueApi';
 import { bookingApi } from '@/api/bookingApi';
 import { Venue } from '@/types/venue';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, CreditCard, CircleCheck as CheckCircle2 } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, CreditCard, CheckCircle2 } from 'lucide-react-native';
 import { RazorpayService } from '@/utils/razorpay';
 
 export default function BookingConfirmScreen() {
@@ -75,15 +75,18 @@ export default function BookingConfirmScreen() {
 
   const totalAmount = calculateTotalAmount();
 
-  const handlePaymentSuccess = async (paymentId: string) => {
+  const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
     try {
       setPaymentLoading(true);
       setError(null);
 
+      // Update payment status
+      await bookingApi.paymentSuccess(orderId, paymentId);
+
       // Create bookings for each slot
       if (slots.length > 1) {
         // Multiple bookings
-        const bookingsData = slots.map((slot: any, index: number) => ({
+        const bookingsData = slots.map((slot: any) => ({
           type: "sports",
           facility_id: facility_id,
           date: date,
@@ -133,6 +136,15 @@ export default function BookingConfirmScreen() {
     }
   };
 
+  const handlePaymentFailure = async (orderId: string) => {
+    try {
+      await bookingApi.paymentFailure(orderId);
+      setError('Payment failed. Please try again.');
+    } catch (error: any) {
+      console.error('Payment failure update error:', error);
+    }
+  };
+
   const handlePayment = async () => {
     try {
       setPaymentLoading(true);
@@ -142,9 +154,11 @@ export default function BookingConfirmScreen() {
         throw new Error('User not logged in');
       }
 
+      const orderId = `order_${Date.now()}`;
+
       const paymentOptions = RazorpayService.createPaymentOptions(
         totalAmount,
-        `order_${Date.now()}`, // Generate order ID
+        orderId,
         {
           name: user.name,
           email: user.email,
@@ -159,13 +173,16 @@ export default function BookingConfirmScreen() {
       );
 
       const response = await RazorpayService.openCheckout(paymentOptions);
-      await handlePaymentSuccess(response.razorpay_payment_id);
+      await handlePaymentSuccess(response.razorpay_payment_id, orderId);
 
     } catch (error: any) {
       if (error.message === 'Payment cancelled by user') {
         setError('Payment was cancelled');
       } else {
         setError(error.message || 'Payment failed. Please try again.');
+        // Handle payment failure
+        const orderId = `order_${Date.now()}`;
+        await handlePaymentFailure(orderId);
       }
       setPaymentLoading(false);
     }
