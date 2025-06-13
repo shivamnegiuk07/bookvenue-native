@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState , useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, MapPin, Upload, DollarSign, Clock, Tag, AlertCircle, CheckCircle2 } from 'lucide-react-native';
+import { Camera, MapPin, Upload, Clock, Tag, AlertCircle, CheckCircle2 , IndianRupee } from 'lucide-react-native';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import * as ImagePicker from 'expo-image-picker';
 import { venueApi } from '@/api/venueApi';
 import { useRouter } from 'expo-router';
+import axios from 'axios';
+
 
 const VenueSchema = Yup.object().shape({
   name: Yup.string().required('Venue name is required'),
@@ -19,6 +21,8 @@ const VenueSchema = Yup.object().shape({
   openingTime: Yup.string().required('Opening time is required'),
   closingTime: Yup.string().required('Closing time is required'),
   amenities: Yup.array().of(Yup.string()),
+  category: Yup.string().required('Category is required'),
+
 });
 
 export default function AddVenueScreen() {
@@ -27,12 +31,29 @@ export default function AddVenueScreen() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [amenitiesOptions, setAmenitiesOptions] = useState([]);
+const [categories, setCategories] = useState([]);
 
   const sportTypes = ['Football', 'Cricket', 'Tennis', 'Basketball', 'Swimming', 'Badminton'];
-  const amenitiesOptions = [
-    'Parking', 'Changing Rooms', 'Showers', 'Lighting', 
-    'Equipment Rental', 'Refreshments', 'Seating', 'WiFi'
-  ];
+  // const amenitiesOptions = [
+  //   'Parking', 'Changing Rooms', 'Showers', 'Lighting', 
+  //   'Equipment Rental', 'Refreshments', 'Seating'
+  // ];
+useEffect(() => {
+  const fetchAmenities = async () => {
+    try {
+      const response = await axios.get('http://admin.bookvenue.app/api/get-all-amenities');
+      setAmenitiesOptions(response.data?.amenities || []);
+
+      const categoryResponse = await axios.get('http://admin.bookvenue.app/api/get-all-service-category');
+      setCategories(categoryResponse.data?.service_category || []);
+    } catch (error) {
+      console.error('Failed to fetch amenities or categories:', error);
+    }
+  };
+
+  fetchAmenities();
+}, []);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -65,6 +86,7 @@ export default function AddVenueScreen() {
           latitude: 37.78825,
           longitude: -122.4324,
         },
+
       };
       
       await venueApi.createVenue(venueData);
@@ -115,6 +137,7 @@ export default function AddVenueScreen() {
             openingTime: '09:00',
             closingTime: '22:00',
             amenities: [],
+            category: '',
           }}
           validationSchema={VenueSchema}
           onSubmit={handleSubmit}
@@ -233,7 +256,7 @@ export default function AddVenueScreen() {
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Price per Hour</Text>
                   <View style={styles.inputWithIcon}>
-                    <DollarSign size={20} color="#6B7280" style={styles.inputIcon} />
+                    <IndianRupee size={20} color="#6B7280" style={styles.inputIcon} />
                     <TextInput
                       style={styles.inputText}
                       placeholder="0"
@@ -287,44 +310,74 @@ export default function AddVenueScreen() {
                   </View>
                 </View>
               </View>
+<View style={styles.formSection}>
+  <Text style={styles.sectionTitle}>Category</Text>
+  <View style={styles.amenitiesContainer}>
+    {categories.map((cat) => {
+      const isSelected = values.category === cat.name;
+      return (
+        <TouchableOpacity
+          key={cat.id}
+          onPress={() => setFieldValue('category', cat.name)} // or cat.id if preferred
+          style={[
+            styles.amenityButton,
+            isSelected && styles.amenityButtonActive,
+          ]}
+        >
+          <Text
+            style={[
+              styles.amenityText,
+              isSelected && styles.amenityTextActive,
+            ]}
+          >
+            {cat.name}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+</View>
+
+
 
               <View style={styles.formSection}>
                 <Text style={styles.sectionTitle}>Amenities</Text>
                 <Text style={styles.sectionSubtitle}>Select all that apply</Text>
-                
+
                 <View style={styles.amenitiesContainer}>
                   {amenitiesOptions.map((amenity) => {
-                    const isSelected = values.amenities.includes(amenity);
+                    const isSelected = values.amenities.includes(amenity.name);
                     return (
-                      <TouchableOpacity 
-                        key={amenity}
+                      <TouchableOpacity
+                        key={amenity.id}
                         style={[
                           styles.amenityButton,
                           isSelected ? styles.amenityButtonActive : null
                         ]}
                         onPress={() => {
                           const newAmenities = isSelected
-                            ? values.amenities.filter((a: string) => a !== amenity)
-                            : [...values.amenities, amenity];
+                            ? values.amenities.filter((a: string) => a !== amenity.name)
+                            : [...values.amenities, amenity.name];
                           setFieldValue('amenities', newAmenities);
                         }}
                       >
-                        <Text 
+                        <Text
                           style={[
                             styles.amenityText,
                             isSelected ? styles.amenityTextActive : null
                           ]}
                         >
-                          {amenity}
+                          {amenity.name}
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
+
               </View>
 
-              <TouchableOpacity 
-                style={styles.submitButton} 
+              <TouchableOpacity
+                style={styles.submitButton}
                 onPress={() => handleSubmit()}
                 disabled={loading}
               >
