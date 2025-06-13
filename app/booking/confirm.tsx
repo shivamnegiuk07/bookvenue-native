@@ -6,7 +6,7 @@ import { venueApi } from '@/api/venueApi';
 import { bookingApi } from '@/api/bookingApi';
 import { Venue } from '@/types/venue';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, CreditCard, CheckCircle2 } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, CreditCard, CircleCheck as CheckCircle2 } from 'lucide-react-native';
 import { RazorpayService } from '@/utils/razorpay';
 
 export default function BookingConfirmScreen() {

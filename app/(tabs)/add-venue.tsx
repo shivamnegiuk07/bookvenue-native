@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, MapPin, Clock, Tag, AlertCircle, CheckCircle2, IndianRupee, Plus, Trash2 } from 'lucide-react-native';
+import { Camera, MapPin, Clock, Tag, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, IndianRupee, Plus, Trash2 } from 'lucide-react-native';
 import { Formik, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import * as ImagePicker from 'expo-image-picker';

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Booking } from '@/types/booking';
-import { MapPin, Clock, CalendarCheck, RotateCcw, CheckCircle2, XCircle, AlertCircle } from 'lucide-react-native';
+import { MapPin, Clock, CalendarCheck, RotateCcw, CircleCheck as CheckCircle2, Circle as XCircle, CircleAlert as AlertCircle } from 'lucide-react-native';
 
 type BookingCardProps = {
   booking: Booking;
