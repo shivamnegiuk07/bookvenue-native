@@ -10,7 +10,6 @@ import { Mail, Phone, CircleAlert as AlertCircle, ArrowRight, User } from 'lucid
 import { authApi } from '@/api/authApi';
 
 export default function RegisterScreen() {
-  const { login } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [showOTP, setShowOTP] = useState(false);
   const [identifier, setIdentifier] = useState('');
@@ -76,6 +75,7 @@ export default function RegisterScreen() {
       setShowOTP(true);
       setResendTimer(60);
     } catch (err: any) {
+      console.error('Registration OTP error:', err);
       setError(err?.response?.data?.message || err.message || 'Failed to send OTP');
     } finally {
       setLoading(false);
@@ -90,24 +90,34 @@ export default function RegisterScreen() {
     const isEmailValid = isEmail && /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(identifier);
     const isOtpValid = otp !== '' && /^[0-9]{6}$/.test(otp);
 
-    if (isMobileValid || isEmailValid) {
-      if (isOtpValid) {
-        setLoading(true);
-        setError(null);
-
-        try {
-          await authApi.verifyRegisterOTP(identifier, otp, name);
-          router.replace('/(tabs)');
-        } catch (err: any) {
-          setError(err?.response?.data?.message || err.message || 'Registration failed');
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setError('Invalid OTP.');
-      }
-    } else {
+    if (!isMobileValid && !isEmailValid) {
       setError('Invalid Mobile No. or Email.');
+      return;
+    }
+
+    if (!isOtpValid) {
+      setError('Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    if (!validateName()) {
+      setError('Please enter a valid name');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('Verifying registration OTP:', { identifier, otp, name });
+      await authApi.verifyRegisterOTP(identifier, otp, name);
+      console.log('Registration successful, navigating to tabs');
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      console.error('Registration verification error:', err);
+      setError(err?.response?.data?.message || err.message || 'Registration failed');
+    } finally {
+      setLoading(false);
     }
   };
 

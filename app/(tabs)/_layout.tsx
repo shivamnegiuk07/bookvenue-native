@@ -1,12 +1,11 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, CalendarClock, Plus, MapPin, User } from 'lucide-react-native';
+import { Home, CalendarClock, CreditCard, MapPin, User } from 'lucide-react-native';
 import { View, Text, StyleSheet } from 'react-native';
 
 export default function TabLayout() {
   const { user } = useAuth();
-  const isVenueOwner = user?.isVenueOwner;
 
   return (
     <Tabs
@@ -36,25 +35,15 @@ export default function TabLayout() {
           ),
         }}
       />
-      {isVenueOwner && (
-        <Tabs.Screen
-          name="add-venue"
-          options={{
-            title: 'Add Venue',
-            tabBarIcon: ({ color }) => (
-              <View style={styles.addVenueIconContainer}>
-                <Plus size={24} color="#FFFFFF" />
-              </View>
-            ),
-            tabBarLabel: ({ focused }) => (
-              <Text style={[
-                styles.tabBarLabel,
-                focused ? styles.tabBarLabelFocused : null
-              ]}>Add</Text>
-            ),
-          }}
-        />
-      )}
+      <Tabs.Screen
+        name="payments"
+        options={{
+          title: 'Payments',
+          tabBarIcon: ({ color, size }) => (
+            <CreditCard size={size} color={color} />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="bookings"
         options={{
@@ -89,17 +78,5 @@ const styles = StyleSheet.create({
   tabBarLabel: {
     fontFamily: 'Inter-Medium',
     fontSize: 12,
-  },
-  tabBarLabelFocused: {
-    color: '#2563EB',
-  },
-  addVenueIconContainer: {
-    backgroundColor: '#2563EB',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
   },
 });
