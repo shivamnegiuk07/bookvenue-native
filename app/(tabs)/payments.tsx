@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { CreditCard, Plus, Trash2, CheckCircle2, AlertCircle, DollarSign, Calendar, Clock } from 'lucide-react-native';
+import { CreditCard, Plus, Trash2, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, DollarSign, Calendar, Clock } from 'lucide-react-native';
 import { RazorpayService } from '@/utils/razorpay';
 
 type PaymentMethod = {

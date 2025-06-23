@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, CalendarClock, CreditCard, MapPin, User } from 'lucide-react-native';
+import { Chrome as Home, CalendarClock, CreditCard, MapPin, User } from 'lucide-react-native';
 import { View, Text, StyleSheet } from 'react-native';
 
 export default function TabLayout() {
