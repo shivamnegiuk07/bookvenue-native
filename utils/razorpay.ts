@@ -17,6 +17,9 @@ export interface RazorpayOptions {
   theme: {
     color: string;
   };
+  modal?: {
+    ondismiss?: () => void;
+  };
 }
 
 export interface RazorpayResponse {
@@ -60,29 +63,48 @@ export class RazorpayService {
     const rzp = new window.Razorpay({
       ...options,
       handler: function (response: RazorpayResponse) {
+        console.log('Razorpay payment successful:', response);
         resolve(response);
       },
       modal: {
         ondismiss: function () {
+          console.log('Razorpay payment dismissed');
           reject(new Error('Payment cancelled by user'));
         }
       }
     });
+    
+    rzp.on('payment.failed', function (response: any) {
+      console.log('Razorpay payment failed:', response);
+      reject(new Error(`Payment failed: ${response.error.description}`));
+    });
+    
     rzp.open();
   }
 
   private static async openNativeCheckout(options: RazorpayOptions): Promise<RazorpayResponse> {
     try {
+      console.log('Opening native Razorpay checkout with options:', options);
+      
       const data = await RazorpayCheckout.open({
         ...options,
         key: this.apiKey,
       });
+      
+      console.log('Native Razorpay payment successful:', data);
       return data;
     } catch (error: any) {
-      if (error.code === 'Cancelled') {
+      console.log('Native Razorpay payment error:', error);
+      
+      if (error.code === 'Cancelled' || error.code === 'PAYMENT_CANCELLED') {
         throw new Error('Payment cancelled by user');
       }
-      throw error;
+      
+      if (error.description) {
+        throw new Error(`Payment failed: ${error.description}`);
+      }
+      
+      throw new Error(`Payment failed: ${error.message || 'Unknown error'}`);
     }
   }
 
@@ -101,24 +123,40 @@ export class RazorpayService {
       slots: number;
     }
   ): RazorpayOptions {
+    // Ensure contact number is properly formatted
+    let contact = userDetails.contact;
+    if (contact && !contact.startsWith('+91')) {
+      // Remove any non-digit characters
+      contact = contact.replace(/\D/g, '');
+      // Add country code if not present
+      if (contact.length === 10) {
+        contact = `+91${contact}`;
+      }
+    }
+
+    const description = bookingDetails.slots > 1 
+      ? `${bookingDetails.slots} slots at ${bookingDetails.venueName}`
+      : `${bookingDetails.courtName} at ${bookingDetails.venueName}`;
+
     return {
       key: this.apiKey,
-      amount: amount * 100, // Convert to paise
+      amount: Math.round(amount * 100), // Convert to paise and ensure integer
       currency: 'INR',
       name: 'BookVenue',
-      description: `Booking for ${bookingDetails.venueName} - ${bookingDetails.courtName}`,
+      description: description,
       image: 'https://images.pexels.com/photos/3775042/pexels-photo-3775042.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
       prefill: {
         name: userDetails.name,
         email: userDetails.email,
-        contact: userDetails.contact
+        contact: contact
       },
       notes: {
         venue_name: bookingDetails.venueName,
         court_name: bookingDetails.courtName,
         booking_date: bookingDetails.date,
-        total_slots: bookingDetails.slots,
-        order_id: orderId
+        total_slots: bookingDetails.slots.toString(),
+        order_id: orderId,
+        platform: Platform.OS
       },
       theme: {
         color: '#2563EB'

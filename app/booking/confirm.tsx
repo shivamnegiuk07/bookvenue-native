@@ -80,8 +80,7 @@ export default function BookingConfirmScreen() {
       setPaymentLoading(true);
       setError(null);
 
-      // Update payment status
-      await bookingApi.paymentSuccess(orderId, paymentId);
+      console.log('Payment successful, creating bookings...', { paymentId, orderId });
 
       // Create bookings for each slot
       if (slots.length > 1) {
@@ -99,8 +98,11 @@ export default function BookingConfirmScreen() {
           email: user?.email,
           contact: user?.phone,
           address: user?.address || "Not provided",
+          payment_id: paymentId,
+          order_id: orderId,
         }));
 
+        console.log('Creating multiple bookings:', bookingsData);
         await bookingApi.createMultipleBookings(bookingsData);
       } else {
         // Single booking
@@ -117,31 +119,47 @@ export default function BookingConfirmScreen() {
           email: user?.email,
           contact: user?.phone,
           address: user?.address || "Not provided",
+          payment_id: paymentId,
+          order_id: orderId,
         };
 
+        console.log('Creating single booking:', bookingData);
         await bookingApi.createBooking(bookingData);
       }
 
+      // Update payment status as successful
+      await bookingApi.paymentSuccess(orderId, paymentId);
+
       setBookingConfirmed(true);
 
-      // Navigate to bookings screen after 2 seconds
+      // Navigate to bookings screen after 3 seconds
       setTimeout(() => {
         router.replace('/bookings');
-      }, 2000);
+      }, 3000);
 
     } catch (error: any) {
-      setError(error.message || 'Booking failed. Please try again.');
+      console.error('Booking creation error:', error);
+      setError(error.message || 'Booking failed. Please contact support.');
+      
+      // Mark payment as failed
+      try {
+        await bookingApi.paymentFailure(orderId);
+      } catch (failureError) {
+        console.error('Failed to mark payment as failed:', failureError);
+      }
     } finally {
       setPaymentLoading(false);
     }
   };
 
-  const handlePaymentFailure = async (orderId: string) => {
+  const handlePaymentFailure = async (orderId: string, error: any) => {
     try {
+      console.log('Payment failed:', error);
       await bookingApi.paymentFailure(orderId);
       setError('Payment failed. Please try again.');
-    } catch (error: any) {
-      console.error('Payment failure update error:', error);
+    } catch (failureError: any) {
+      console.error('Payment failure update error:', failureError);
+      setError('Payment failed. Please try again or contact support.');
     }
   };
 
@@ -154,7 +172,18 @@ export default function BookingConfirmScreen() {
         throw new Error('User not logged in');
       }
 
-      const orderId = `order_${Date.now()}`;
+      if (!user.phone || user.phone.length < 10) {
+        throw new Error('Please update your phone number in profile to proceed with payment');
+      }
+
+      const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      console.log('Initiating payment with Razorpay...', {
+        amount: totalAmount,
+        orderId,
+        user: user.name,
+        venue: venue?.name
+      });
 
       const paymentOptions = RazorpayService.createPaymentOptions(
         totalAmount,
@@ -173,17 +202,25 @@ export default function BookingConfirmScreen() {
       );
 
       const response = await RazorpayService.openCheckout(paymentOptions);
+      console.log('Payment response received:', response);
+      
       await handlePaymentSuccess(response.razorpay_payment_id, orderId);
 
     } catch (error: any) {
+      console.error('Payment error:', error);
+      
       if (error.message === 'Payment cancelled by user') {
         setError('Payment was cancelled');
+      } else if (error.message.includes('phone number')) {
+        setError(error.message);
       } else {
         setError(error.message || 'Payment failed. Please try again.');
+        
         // Handle payment failure
-        const orderId = `order_${Date.now()}`;
-        await handlePaymentFailure(orderId);
+        const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await handlePaymentFailure(orderId, error);
       }
+      
       setPaymentLoading(false);
     }
   };
@@ -221,8 +258,20 @@ export default function BookingConfirmScreen() {
           </View>
           <Text style={styles.successTitle}>Booking Confirmed!</Text>
           <Text style={styles.successText}>
-            Your {numberOfSlots > 1 ? `${numberOfSlots} bookings have` : 'booking has'} been successfully confirmed. You can view your booking details in the Bookings tab.
+            Your {numberOfSlots > 1 ? `${numberOfSlots} bookings have` : 'booking has'} been successfully confirmed. 
+            Payment of ₹{totalAmount} has been processed.
           </Text>
+          <Text style={styles.successSubtext}>
+            You can view your booking details in the Bookings tab.
+          </Text>
+          <View style={styles.successDetails}>
+            <Text style={styles.successDetailText}>Venue: {venue.name}</Text>
+            <Text style={styles.successDetailText}>Court: {courtName}</Text>
+            <Text style={styles.successDetailText}>Date: {formatDate(date || '')}</Text>
+            <Text style={styles.successDetailText}>
+              {numberOfSlots > 1 ? `${numberOfSlots} time slots` : `${slots[0]?.startTime} - ${slots[0]?.endTime}`}
+            </Text>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -317,7 +366,12 @@ export default function BookingConfirmScreen() {
           </View>
 
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryItemLabel}>Service fee</Text>
+            <Text style={styles.summaryItemLabel}>Platform fee</Text>
+            <Text style={styles.summaryItemValue}>₹0.00</Text>
+          </View>
+
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryItemLabel}>Taxes & fees</Text>
             <Text style={styles.summaryItemValue}>₹0.00</Text>
           </View>
 
@@ -334,7 +388,10 @@ export default function BookingConfirmScreen() {
 
           <TouchableOpacity style={styles.paymentMethodItem}>
             <CreditCard size={20} color="#2563EB" />
-            <Text style={styles.paymentMethodText}>Razorpay (UPI, Cards, Wallets)</Text>
+            <View style={styles.paymentMethodInfo}>
+              <Text style={styles.paymentMethodText}>Razorpay</Text>
+              <Text style={styles.paymentMethodSubtext}>UPI, Cards, Wallets & More</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -343,20 +400,32 @@ export default function BookingConfirmScreen() {
             <Text style={styles.errorMessage}>{error}</Text>
           </View>
         )}
+
+        <View style={styles.securityNote}>
+          <Text style={styles.securityText}>
+            🔒 Your payment is secured by Razorpay with 256-bit SSL encryption
+          </Text>
+        </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.payButton}
-          onPress={handlePayment}
-          disabled={paymentLoading}
-        >
-          {paymentLoading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.payButtonText}>Pay ₹{totalAmount.toFixed(2)}</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.footerContent}>
+          <View style={styles.totalContainer}>
+            <Text style={styles.footerTotalLabel}>Total</Text>
+            <Text style={styles.footerTotalValue}>₹{totalAmount.toFixed(2)}</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.payButton, paymentLoading && styles.payButtonDisabled]}
+            onPress={handlePayment}
+            disabled={paymentLoading}
+          >
+            {paymentLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.payButtonText}>Pay Now</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -409,6 +478,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#1F2937',
     marginBottom: 16,
+    textAlign: 'center',
   },
   successText: {
     fontFamily: 'Inter-Regular',
@@ -416,6 +486,26 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 8,
+  },
+  successSubtext: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  successDetails: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 16,
+    width: '100%',
+  },
+  successDetailText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 4,
   },
   header: {
     flexDirection: 'row',
@@ -439,7 +529,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 120, // Extra padding for fixed footer
   },
   bookingDetailsContainer: {
     backgroundColor: '#FFFFFF',
@@ -613,11 +703,18 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     borderRadius: 8,
   },
+  paymentMethodInfo: {
+    marginLeft: 12,
+  },
   paymentMethodText: {
     fontFamily: 'Inter-Medium',
     fontSize: 16,
     color: '#1F2937',
-    marginLeft: 12,
+  },
+  paymentMethodSubtext: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#6B7280',
   },
   errorMessageContainer: {
     backgroundColor: '#FEF2F2',
@@ -630,21 +727,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#EF4444',
   },
+  securityNote: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  securityText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#0369A1',
+    textAlign: 'center',
+  },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Account for home indicator on iOS
+  },
+  footerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  totalContainer: {
+    flex: 1,
+  },
+  footerTotalLabel: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  footerTotalValue: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 20,
+    color: '#1F2937',
   },
   payButton: {
     backgroundColor: '#2563EB',
     paddingVertical: 16,
+    paddingHorizontal: 32,
     borderRadius: 8,
+    minWidth: 120,
     alignItems: 'center',
+  },
+  payButtonDisabled: {
+    backgroundColor: '#93C5FD',
   },
   payButtonText: {
     fontFamily: 'Inter-SemiBold',

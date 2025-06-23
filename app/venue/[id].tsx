@@ -186,7 +186,10 @@ export default function VenueDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]} 
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.imageContainer}>
           <FlatList
             data={venue.images}
@@ -435,39 +438,42 @@ export default function VenueDetailScreen() {
               <Text style={styles.noSlotsText}>No time slots available for selected court</Text>
             </View>
           )}
-          
-          <View style={styles.bookingFooter}>
-            <View style={styles.priceContainer}>
-              <Text style={styles.priceLabel}>
-                {selectedTimeSlots.length > 1 ? 'Total' : 'Price'}
-              </Text>
-              <Text style={styles.priceValue}>
-                ₹{totalAmount || (selectedCourt ? selectedCourt.slot_price : venue.pricePerHour)}
-              </Text>
-              {selectedTimeSlots.length <= 1 && (
-                <Text style={styles.priceUnit}>/hour</Text>
-              )}
-              {selectedTimeSlots.length > 1 && (
-                <Text style={styles.priceUnit}>({selectedTimeSlots.length} slots)</Text>
-              )}
-            </View>
-            
-            <TouchableOpacity 
-              style={[
-                styles.bookButton,
-                selectedTimeSlots.length === 0 && styles.bookButtonDisabled
-              ]}
-              onPress={handleBooking}
-              disabled={selectedTimeSlots.length === 0}
-            >
-              <Text style={styles.bookButtonText}>
-                Book {selectedTimeSlots.length > 1 ? `${selectedTimeSlots.length} Slots` : 'Now'}
-              </Text>
-              <ArrowRight size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
         </View>
       </ScrollView>
+
+      {/* Fixed Footer */}
+      <View style={styles.footer}>
+        <View style={styles.footerContent}>
+          <View style={styles.priceContainer}>
+            <Text style={styles.priceLabel}>
+              {selectedTimeSlots.length > 1 ? 'Total' : 'Price'}
+            </Text>
+            <Text style={styles.priceValue}>
+              ₹{totalAmount || (selectedCourt ? selectedCourt.slot_price : venue.pricePerHour)}
+            </Text>
+            {selectedTimeSlots.length <= 1 && (
+              <Text style={styles.priceUnit}>/hour</Text>
+            )}
+            {selectedTimeSlots.length > 1 && (
+              <Text style={styles.priceUnit}>({selectedTimeSlots.length} slots)</Text>
+            )}
+          </View>
+          
+          <TouchableOpacity 
+            style={[
+              styles.bookButton,
+              selectedTimeSlots.length === 0 && styles.bookButtonDisabled
+            ]}
+            onPress={handleBooking}
+            disabled={selectedTimeSlots.length === 0}
+          >
+            <Text style={styles.bookButtonText}>
+              Book {selectedTimeSlots.length > 1 ? `${selectedTimeSlots.length} Slots` : 'Now'}
+            </Text>
+            <ArrowRight size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -815,11 +821,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-  bookingFooter: {
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+  },
+  footerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'space-between',
+    padding: 16,
   },
   priceContainer: {
     flexDirection: 'row',
